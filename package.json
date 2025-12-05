@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "start:mcp": "cd mcp-server && npm start",
-    "dev": "npm run start:mcp & npm start"
+    "start:mcp:http": "cd mcp-server && npm run start:http",
+    "dev": "npm run start:mcp:http & npm start"
   },
   "devDependencies": {
     "electron": "^28.2.0"

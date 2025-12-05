@@ -149,6 +149,40 @@
       letter-spacing: 0.6px;
       text-transform: uppercase;
     }
+
+    .orders {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .order-row {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.02);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .order-meta {
+      display: grid;
+      gap: 4px;
+    }
+
+    .order-id {
+      margin: 0;
+      font-weight: 600;
+    }
+
+    .order-sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>

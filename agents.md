@@ -3,7 +3,7 @@
 This repo contains an Electron shell plus a local Shopify MCP server. When working on PRs, follow these checks to keep things smooth:
 
 ## Quick checks
-- Verify scripts: `npm start` for Electron, `npm run start:mcp` for the Shopify MCP server (uses `mcp-server/.env`), `npm run dev` to run both.
+- Verify scripts: `npm start` for Electron, `npm run start:mcp` (stdio) or `npm run start:mcp:http` (HTTP bridge for renderer), `npm run dev` to run HTTP bridge + Electron together.
 - Environment: keep real Shopify creds in `mcp-server/.env` (ignored by git). File must define `SHOPIFY_ACCESS_TOKEN`, `SHOPIFY_DOMAIN`, and `PORT`.
 - Dependencies: install root deps with `npm install`; install MCP deps with `cd mcp-server && npm install`.
 - Submodule cleanup: `mcp-server` should be a normal folder (no nested `.git`). If you see submodule warnings, remove `mcp-server/.git` before committing.
