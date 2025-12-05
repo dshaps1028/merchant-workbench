@@ -1,0 +1,13 @@
+{
+  "name": "merchant-workbench",
+  "version": "0.1.0",
+  "main": "main.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.2.0"
+  }
+}
