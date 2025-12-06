@@ -37,8 +37,8 @@ const Panel = ({ title, description, id, children }) =>
     children
   );
 
-const ActionButton = ({ onClick, children }) =>
-  h('button', { onClick }, children);
+const ActionButton = ({ onClick, children, ...rest }) =>
+  h('button', { onClick, ...rest }, children);
 
 const LogList = ({ entries }) =>
   h(
@@ -48,7 +48,16 @@ const LogList = ({ entries }) =>
       h(
         'li',
         { key: idx, className: 'log-entry' },
-        `${entry.time.toLocaleTimeString()} — ${entry.count} record${entry.count === 1 ? '' : 's'}`
+        h(
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
+          h('strong', null, entry.label || 'Saved query'),
+          h(
+            'span',
+            { className: 'order-sub' },
+            `${entry.time.toLocaleTimeString()} • ${entry.count} record${entry.count === 1 ? '' : 's'}`
+          )
+        )
       )
     )
   );
@@ -114,13 +123,17 @@ function App() {
   const [nlProcessing, setNlProcessing] = useState(false);
   const [schedulerQuery, setSchedulerQuery] = useState('');
   const [schedulerProcessing, setSchedulerProcessing] = useState(false);
+  const [lastQueryLabel, setLastQueryLabel] = useState('');
 
   useEffect(() => {
     setStatus('Ready');
   }, []);
 
-  const addLog = (count) => {
-    setLogs((prev) => [...prev, { time: new Date(), count }]);
+  const addLog = ({ count, label }) => {
+    setLogs((prev) => [
+      ...prev,
+      { time: new Date(), count, label: label || 'Saved query' }
+    ]);
   };
 
   const handleAction = () => {};
@@ -192,7 +205,6 @@ function App() {
       }
 
       setOrders(loaded);
-      addLog(loaded.length);
       setStatus('Ready');
     } catch (error) {
       setOrdersError(error.message || 'Failed to fetch orders');
@@ -231,6 +243,10 @@ function App() {
     setStatus('Interpreting request…');
 
     try {
+      const trimmedQuery = nlQuery.trim();
+      if (trimmedQuery) {
+        setLastQueryLabel(trimmedQuery);
+      }
       const codexResponse = await window.electronAPI.codexOrders(nlQuery.trim());
       if (!codexResponse?.ok) {
         throw new Error(codexResponse?.error || 'Codex returned an error');
@@ -345,6 +361,14 @@ function App() {
     }
   };
 
+  const handleSaveQuery = () => {
+    if (!hasQueriedOrders) {
+      return;
+    }
+    const label = lastQueryLabel || (nlQuery && nlQuery.trim()) || 'Saved query';
+    addLog({ count: orders.length, label });
+  };
+
   return h(
     React.Fragment,
     null,
@@ -401,9 +425,22 @@ function App() {
                 },
                 nlProcessing ? 'Working…' : 'Search Shopify'
               )
-            ),
-          h(OrdersList, { orders, loading: ordersLoading, error: ordersError, queried: hasQueriedOrders })
-        ),
+            )
+          ),
+          hasQueriedOrders && orders.length > 0 && !ordersLoading && !nlProcessing
+            ? h(
+                'div',
+                {
+                  style: {
+                    display: 'flex',
+                    justifyContent: 'flex-start',
+                    marginBottom: '12px'
+                  }
+                },
+                h(ActionButton, { onClick: handleSaveQuery }, 'Save Query & Results')
+              )
+            : null,
+          h(OrdersList, { orders, loading: ordersLoading, error: ordersError, queried: hasQueriedOrders }),
           h(
             Panel,
             {
@@ -423,7 +460,7 @@ function App() {
               },
               h('input', {
                 type: 'text',
-                placeholder: 'Describe the export schedule (e.g., "daily CSV of unfulfilled orders")',
+                placeholder: 'Describe the export schedule (e.g., \"daily CSV of unfulfilled orders\")',
                 value: schedulerQuery,
                 onChange: (event) => setSchedulerQuery(event.target.value),
                 style: { flex: '1 1 240px' }
