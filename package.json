@@ -8,12 +8,14 @@
     "start": "electron .",
     "start:mcp": "cd mcp-server && npm start",
     "start:mcp:http": "cd mcp-server && npm run start:http",
-    "dev": "npm run start:mcp:http & npm start"
+    "dev": "npm start"
   },
   "devDependencies": {
     "electron": "^28.2.0"
   },
   "dependencies": {
-    "@openai/codex-sdk": "^0.65.0"
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@openai/codex-sdk": "^0.65.0",
+    "zod": "^4.1.13"
   }
 }

@@ -8,8 +8,6 @@ const formatLog = (message) => {
 
 const Shell = ({ children }) => h('div', { className: 'shell' }, children);
 
-const ORDERS_ENDPOINT = 'http://localhost:3001/orders';
-
 const PageTitle = ({ title, subtitle }) =>
   h(
     'div',
@@ -110,28 +108,23 @@ function App() {
     setOrdersLoading(true);
     setOrdersError('');
     setStatus('Fetching orders…');
-    setLog(formatLog('Fetching orders from MCP HTTP bridge…'));
+    setLog(formatLog('Fetching orders via MCP tool…'));
 
     try {
-      const url = new URL(ORDERS_ENDPOINT);
-      const { limit, status: financial_status, since } = queryParams;
-      url.searchParams.set('limit', limit || 5);
-      if (financial_status) {
-        url.searchParams.set('financial_status', financial_status);
-      }
-      if (since) {
-        url.searchParams.set('processed_at_min', since);
+      if (!window.electronAPI?.mcpListOrders) {
+        throw new Error('MCP client is not available');
       }
 
-      const res = await fetch(url.toString());
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+      const limit = Math.max(1, Math.min(50, Number(queryParams.limit) || 5));
+      const result = await window.electronAPI.mcpListOrders({ ...queryParams, limit });
+      if (!result?.ok) {
+        throw new Error(result?.error || 'MCP call failed');
       }
-      const data = await res.json();
-      const loaded = data.orders || [];
+
+      const loaded = result.orders || [];
       setOrders(loaded);
-      setLog(formatLog(`Fetched ${loaded.length} orders.`));
+      const summary = result.text || `Fetched ${loaded.length} orders.`;
+      setLog(formatLog(summary));
       setStatus('Ready');
     } catch (error) {
       setOrdersError(error.message || 'Failed to fetch orders');
@@ -168,7 +161,10 @@ function App() {
       await handleFetchOrders({
         limit: params.limit,
         status: params.status,
-        since: params.since
+        fulfillment_status: params.fulfillment_status,
+        created_at_min: params.created_at_min,
+        created_at_max: params.created_at_max,
+        email: params.email
       });
     } catch (error) {
       setOrdersError(error.message || 'Failed to process Codex request');
