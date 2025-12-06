@@ -128,7 +128,29 @@ function App() {
         throw new Error(result?.error || 'MCP call failed');
       }
 
-      const loaded = result.orders || [];
+      let loaded = result.orders || [];
+
+      // Client-side guard: enforce exact matches when provided
+      if (queryParams.order_id) {
+        const target = String(queryParams.order_id).trim().toLowerCase();
+        loaded = loaded.filter(
+          (o) =>
+            String(o.id).toLowerCase() === target ||
+            (o.admin_graphql_api_id &&
+              String(o.admin_graphql_api_id).toLowerCase().endsWith(target))
+        );
+      }
+
+      if (queryParams.order_number) {
+        const needle = String(queryParams.order_number).trim().toLowerCase().replace(/^#/, '');
+        loaded = loaded.filter((o) => {
+          const name = o.name ? String(o.name).toLowerCase().replace(/^#/, '') : '';
+          const num =
+            o.order_number !== undefined ? String(o.order_number).toLowerCase().replace(/^#/, '') : '';
+          return name === needle || num === needle;
+        });
+      }
+
       setOrders(loaded);
       addLog(loaded.length);
       setStatus('Ready');
@@ -183,13 +205,27 @@ function App() {
         }
       }
 
+      // Heuristic: derive order_number if present in raw query and not parsed
+      let derivedOrderNumber = params.order_number;
+      if (!derivedOrderNumber) {
+        const token = nlQuery
+          .match(/[#]?[A-Za-z0-9-]{5,}/g)
+          ?.find((t) => /[0-9]/.test(t));
+        if (token) {
+          derivedOrderNumber = token.replace(/^#/, '');
+        }
+      }
+
       await handleFetchOrders({
         limit: derivedLimit,
         status: params.status,
         fulfillment_status: params.fulfillment_status,
         created_at_min: params.created_at_min,
         created_at_max: params.created_at_max,
-        email: params.email
+        email: params.email,
+        order_id: params.order_id,
+        order_number: derivedOrderNumber,
+        customer_name: params.customer_name
       });
     } catch (error) {
       setOrdersError(error.message || 'Failed to process Codex request');

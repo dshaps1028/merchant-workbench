@@ -82,7 +82,10 @@ const codexOrders = async (prompt) => {
         fulfillment_status: { type: 'string', nullable: true },
         created_at_min: { type: 'string', nullable: true },
         created_at_max: { type: 'string', nullable: true },
-        email: { type: 'string', nullable: true }
+        email: { type: 'string', nullable: true },
+        order_id: { type: 'string', nullable: true },
+        order_number: { type: 'string', nullable: true },
+        customer_name: { type: 'string', nullable: true }
       },
       required: [
         'limit',
@@ -90,7 +93,10 @@ const codexOrders = async (prompt) => {
         'fulfillment_status',
         'created_at_min',
         'created_at_max',
-        'email'
+        'email',
+        'order_id',
+        'order_number',
+        'customer_name'
       ],
       additionalProperties: false
     };
@@ -104,7 +110,7 @@ const codexOrders = async (prompt) => {
             'Return JSON matching the schema. If the user asks for a number of orders, set limit; otherwise default to 5. ' +
             'If they mention a status, include it as status. If they mention fulfillment state, include fulfillment_status. ' +
             'If they mention a timeframe (e.g., yesterday), set created_at_min and created_at_max to ISO8601 timestamps covering that range. ' +
-            'If they mention an email, include it as email.'
+            'If they mention an email, include it as email. If they mention an order id or number, include order_id or order_number. If they mention a customer name, include customer_name.'
         },
         { type: 'text', text: `User request: ${prompt}` }
       ],
