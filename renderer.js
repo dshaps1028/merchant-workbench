@@ -37,6 +37,61 @@ const Panel = ({ title, description, id, children }) =>
     children
   );
 
+const Modal = ({ children, onClose }) =>
+  h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: 'rgba(149, 191, 72, 0.9)',
+          color: '#000',
+          borderRadius: '12px',
+          padding: '24px',
+          width: 'min(720px, 92vw)',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          boxShadow: '0 18px 40px rgba(0,0,0,0.38)',
+          position: 'relative'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#000',
+            borderRadius: '50%',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }
+        },
+        '✕'
+      ),
+      children
+    )
+  );
+
 const ActionButton = ({ onClick, children, ...rest }) =>
   h('button', { onClick, ...rest }, children);
 
@@ -62,7 +117,7 @@ const LogList = ({ entries }) =>
     )
   );
 
-const OrdersList = ({ orders, loading, error, queried }) => {
+const OrdersList = ({ orders, loading, error, queried, onSelect }) => {
   if (loading) {
     return h('p', { className: 'order-sub' }, 'Loading orders…');
   }
@@ -82,7 +137,12 @@ const OrdersList = ({ orders, loading, error, queried }) => {
     orders.map((order) =>
       h(
         'li',
-        { key: order.id, className: 'order-row' },
+        {
+          key: order.id,
+          className: 'order-row',
+          onClick: () => onSelect && onSelect(order),
+          style: { cursor: onSelect ? 'pointer' : undefined }
+        },
         h(
           'div',
           { className: 'order-meta' },
@@ -134,12 +194,30 @@ const deriveDateRangeFromQuery = (query, existingMin, existingMax) => {
   const explicitDateMatch =
     query.match(/\b\d{4}-\d{2}-\d{2}\b/) ||
     query.match(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i);
+  const monthOnlyMatch = query.match(
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b(?:\s+(\d{4}))?/i
+  );
+
   if (explicitDateMatch) {
     const parsed = Date.parse(explicitDateMatch[0]);
     if (!Number.isNaN(parsed)) {
       const parsedDate = new Date(parsed);
       rangeStart = startOfDay(parsedDate);
       rangeEnd = endOfDay(parsedDate);
+    }
+  } else if (monthOnlyMatch) {
+    const monthToken = monthOnlyMatch[1].toLowerCase().slice(0, 3);
+    const monthIndex =
+      ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(
+        monthToken === 'sep' && monthOnlyMatch[1].toLowerCase().startsWith('sept') ? 'sep' : monthToken
+      );
+    const now = new Date();
+    const year = monthOnlyMatch[2] ? Number(monthOnlyMatch[2]) : now.getFullYear();
+    if (monthIndex !== -1) {
+      const effectiveYear =
+        !monthOnlyMatch[2] && monthIndex > now.getMonth() ? now.getFullYear() - 1 : year;
+      rangeStart = new Date(effectiveYear, monthIndex, 1, 0, 0, 0, 0);
+      rangeEnd = new Date(effectiveYear, monthIndex + 1, 0, 23, 59, 59, 999);
     }
   } else if (lcQuery.includes('last year')) {
     const now = new Date();
@@ -196,6 +274,7 @@ function App() {
   const [schedulerQuery, setSchedulerQuery] = useState('');
   const [schedulerProcessing, setSchedulerProcessing] = useState(false);
   const [lastQueryLabel, setLastQueryLabel] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   useEffect(() => {
     setStatus('Ready');
@@ -222,7 +301,7 @@ function App() {
 
       const normalizedLimit =
         queryParams.limit !== undefined
-          ? Math.max(1, Math.min(50, Number(queryParams.limit)))
+          ? Math.max(1, Math.min(250, Number(queryParams.limit)))
           : undefined;
 
       const requestPayload = { ...queryParams };
@@ -232,12 +311,27 @@ function App() {
         delete requestPayload.limit;
       }
 
+      console.log('[orders] list_orders payload:', JSON.stringify(requestPayload, null, 2));
       const result = await window.electronAPI.mcpListOrders(requestPayload);
       if (!result?.ok) {
         throw new Error(result?.error || 'MCP call failed');
       }
 
       let loaded = result.orders || [];
+      console.log('[orders] list_orders result count:', Array.isArray(loaded) ? loaded.length : 0);
+      if (Array.isArray(loaded)) {
+        loaded.forEach((order, idx) => {
+          console.log(`[orders] result[${idx}]:`, JSON.stringify(order, null, 2));
+        });
+      }
+
+      // If we queried by name/order_number, avoid client-side filters that could strip it
+      if (queryParams.name) {
+        setOrders(loaded);
+        setSelectedOrder(null);
+        setStatus('Ready');
+        return;
+      }
 
       // Client-side guard: enforce exact matches when provided
       if (queryParams.order_id) {
@@ -256,7 +350,12 @@ function App() {
           const name = o.name ? String(o.name).toLowerCase().replace(/^#/, '') : '';
           const num =
             o.order_number !== undefined ? String(o.order_number).toLowerCase().replace(/^#/, '') : '';
-          return name === needle || num === needle;
+          return (
+            name === needle ||
+            num === needle ||
+            (name && name.includes(needle)) ||
+            (num && num.includes(needle))
+          );
         });
       }
 
@@ -309,6 +408,7 @@ function App() {
       }
 
       setOrders(loaded);
+      setSelectedOrder(null);
       setStatus('Ready');
     } catch (error) {
       setOrdersError(error.message || 'Failed to fetch orders');
@@ -356,17 +456,18 @@ function App() {
     setOrdersError('');
     setStatus('Interpreting request…');
 
-    try {
-      const trimmedQuery = nlQuery.trim();
-      if (trimmedQuery) {
-        setLastQueryLabel(trimmedQuery);
-      }
-      const codexResponse = await window.electronAPI.codexOrders(nlQuery.trim());
-      if (!codexResponse?.ok) {
-        throw new Error(codexResponse?.error || 'Codex returned an error');
-      }
+      try {
+        const trimmedQuery = nlQuery.trim();
+        if (trimmedQuery) {
+          setLastQueryLabel(trimmedQuery);
+        }
+        const codexResponse = await window.electronAPI.codexOrders(nlQuery.trim());
+        if (!codexResponse?.ok) {
+          throw new Error(codexResponse?.error || 'Codex returned an error');
+        }
 
-      const params = codexResponse.data || {};
+        const params = codexResponse.data || {};
+        console.log('[orders] codex params:', params);
       const paymentStatuses = [
         'authorized',
         'pending',
@@ -414,7 +515,7 @@ function App() {
         }
       }
 
-      // Heuristic: derive order_number if present in raw query and not parsed
+      // Heuristic: derive order_number/name if present in raw query and not parsed
       let derivedOrderNumber = params.order_number;
       if (!derivedOrderNumber) {
         const token = nlQuery
@@ -423,6 +524,24 @@ function App() {
         if (token) {
           derivedOrderNumber = token.replace(/^#/, '');
         }
+      }
+
+      // Heuristic: treat non-numeric order_id as an order_number/name
+      let derivedOrderId = params.order_id;
+      if (derivedOrderId) {
+        const asString = String(derivedOrderId).trim();
+        const isNumeric = /^\d+$/.test(asString);
+        if (!isNumeric) {
+          if (!derivedOrderNumber) {
+            derivedOrderNumber = asString.replace(/^#/, '');
+          }
+          derivedOrderId = null;
+        }
+      }
+
+      // If we have an order_number, avoid applying order_id filters to prevent mismatches
+      if (derivedOrderNumber) {
+        derivedOrderId = null;
       }
 
       // Heuristic: extract email if Codex missed it
@@ -437,12 +556,15 @@ function App() {
       // Heuristic: extract SKU if Codex missed it (look for "sku ABC-123" patterns)
       let derivedSku = params.sku;
       if (!derivedSku) {
-        const skuMatch =
-          nlQuery.match(/sku\s*[:#]?\s*([A-Z0-9._-]{3,})/i)?.[1] ||
-          nlQuery.match(/\b[A-Z0-9][A-Z0-9._-]{2,}\b/)?.[0];
+        const skuMatch = nlQuery.match(/sku\s*[:#]?\s*([A-Z0-9._-]{3,})/i)?.[1];
         if (skuMatch) {
           derivedSku = skuMatch;
         }
+      }
+
+      // If we have an order name/number, do not also treat it as SKU
+      if (derivedOrderNumber) {
+        derivedSku = null;
       }
 
       const { created_at_min, created_at_max } = deriveDateRangeFromQuery(
@@ -456,19 +578,38 @@ function App() {
         created_at_min,
         created_at_max,
         email: derivedEmail,
-        order_id: params.order_id,
-        order_number: derivedOrderNumber,
+        order_id: derivedOrderId,
+        // Send the token as name; omit order_number so we only target name
+        name: derivedOrderNumber || undefined,
+        order_number: undefined,
         customer_name: params.customer_name,
-        sku: derivedSku
+        sku: derivedSku || undefined
       };
 
+      // Strip undefined/null/empty-string fields before sending
+      const cleanedPayload = Object.fromEntries(
+        Object.entries(requestPayload).filter(
+          ([, value]) => value !== undefined && value !== null && value !== ''
+        )
+      );
+
       if (derivedLimit !== undefined && derivedLimit !== null) {
-        requestPayload.limit = derivedLimit;
+        cleanedPayload.limit = derivedLimit;
       }
       if (normalizedStatus) requestPayload.status = normalizedStatus;
       if (normalizedFinancialStatus) requestPayload.financial_status = normalizedFinancialStatus;
+      // For exact order lookups, avoid over-filtering with status/date constraints
+      if (derivedOrderNumber || derivedOrderId) {
+        delete requestPayload.status;
+        delete requestPayload.financial_status;
+        delete requestPayload.fulfillment_status;
+        delete requestPayload.created_at_min;
+        delete requestPayload.created_at_max;
+        cleanedPayload.status = 'any';
+        cleanedPayload.limit = 250;
+      }
 
-      await handleFetchOrders(requestPayload);
+      await handleFetchOrders(cleanedPayload);
     } catch (error) {
       setOrdersError(error.message || 'Failed to process Codex request');
       setStatus('Error');
@@ -480,6 +621,58 @@ function App() {
   return h(
     React.Fragment,
     null,
+    selectedOrder
+      ? h(
+          Modal,
+          { onClose: () => setSelectedOrder(null) },
+          h('h2', null, selectedOrder.name || `Order #${selectedOrder.id}`),
+          h(
+            'p',
+            { className: 'order-sub' },
+            `Status: ${selectedOrder.financial_status || 'unknown'} / ${selectedOrder.fulfillment_status || 'unfulfilled'}`
+          ),
+          h(
+            'p',
+            { className: 'order-sub' },
+            `Email: ${selectedOrder.email || (selectedOrder.customer && selectedOrder.customer.email) || 'N/A'}`
+          ),
+          h(
+            'p',
+            { className: 'order-sub' },
+            `Total: ${selectedOrder.total_price ? `$${selectedOrder.total_price} ${selectedOrder.currency || ''}` : '—'}`
+          ),
+          h(
+            'p',
+            { className: 'order-sub' },
+            `Date: ${
+              selectedOrder.created_at
+                ? new Date(selectedOrder.created_at).toLocaleString()
+                : 'N/A'
+            }`
+          ),
+          h(
+            'div',
+            { style: { marginTop: '12px' } },
+            h('strong', null, 'Line items:'),
+            h(
+              'ul',
+              { className: 'orders' },
+              (selectedOrder.line_items || []).map((item, idx) =>
+                h(
+                  'li',
+                  { key: `${item.id || idx}-${item.sku || idx}`, className: 'order-row' },
+                  h('p', { className: 'order-id' }, `${item.title || 'Item'} x${item.quantity || 1}`),
+                  h(
+                    'p',
+                    { className: 'order-sub' },
+                    `SKU: ${item.sku || 'N/A'} • Price: ${item.price ? `$${item.price}` : '—'}`
+                  )
+                )
+              )
+            )
+          )
+        )
+      : null,
     h(PageTitle, {
       title: 'Merchant Workbench',
       subtitle:
@@ -548,7 +741,13 @@ function App() {
                 h(ActionButton, { onClick: handleSaveQuery }, 'Save Query & Results')
               )
             : null,
-          h(OrdersList, { orders, loading: ordersLoading, error: ordersError, queried: hasQueriedOrders }),
+          h(OrdersList, {
+            orders,
+            loading: ordersLoading,
+            error: ordersError,
+            queried: hasQueriedOrders,
+            onSelect: setSelectedOrder
+          }),
           h(
             Panel,
             {
