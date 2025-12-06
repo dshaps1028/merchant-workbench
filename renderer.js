@@ -158,8 +158,17 @@ function App() {
 
       const params = codexResponse.data || {};
       setLog(formatLog(`Codex mapped request to: ${JSON.stringify(params)}`));
+      // Fallback: if Codex didn't return a limit, try to extract a number from the query text
+      let derivedLimit = params.limit;
+      if (!derivedLimit) {
+        const match = nlQuery.match(/\b(\d{1,2})\b/);
+        if (match) {
+          derivedLimit = Number(match[1]);
+        }
+      }
+
       await handleFetchOrders({
-        limit: params.limit,
+        limit: derivedLimit,
         status: params.status,
         fulfillment_status: params.fulfillment_status,
         created_at_min: params.created_at_min,
