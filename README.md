@@ -48,6 +48,17 @@ You can run the Electron shell and MCP server separately or together:
 
 If you run the MCP server manually, ensure it is listening on the `PORT` you configured in `.env` before launching the Electron app.
 
+## MCP server details
+The included MCP server (launched from `mcp-server/index.js`) uses the Model Context Protocol SDK to expose a Shopify-focused tool set. The primary tool today is `list_orders`, which returns Shopify order data and supports filtering by:
+
+- `limit`: maximum number of orders to return (up to 50)
+- `status`: order status filter
+- `fulfillment_status`: fulfillment state filter
+- `created_at_min` / `created_at_max`: ISO8601 timestamps bounding the created-at window
+- `email`: customer email address
+
+The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http` or `npm run dev`.
+
 ## Project structure
 - `main.js`: Electron main process that creates the browser window.
 - `preload.js`: Preload script for the renderer.
