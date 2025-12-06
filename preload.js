@@ -86,7 +86,8 @@ const codexOrders = async (prompt) => {
         email: { type: 'string', nullable: true },
         order_id: { type: 'string', nullable: true },
         order_number: { type: 'string', nullable: true },
-        customer_name: { type: 'string', nullable: true }
+        customer_name: { type: 'string', nullable: true },
+        sku: { type: 'string', nullable: true }
       },
       required: [
         'limit',
@@ -98,7 +99,8 @@ const codexOrders = async (prompt) => {
         'email',
         'order_id',
         'order_number',
-        'customer_name'
+        'customer_name',
+        'sku'
       ],
       additionalProperties: false
     };
@@ -113,7 +115,7 @@ const codexOrders = async (prompt) => {
             'If they mention an order status, include it as status. If they mention payment status, include financial_status. ' +
             'If they mention fulfillment state, include fulfillment_status. ' +
             'If they mention a timeframe (e.g., yesterday), set created_at_min and created_at_max to ISO8601 timestamps covering that range. ' +
-            'If they mention an email, include it as email. If they mention an order id or number, include order_id or order_number. If they mention a customer name, include customer_name.'
+            'If they mention an email, include it as email. If they mention an order id or number, include order_id or order_number. If they mention a customer name, include customer_name. If they mention a SKU, include sku (exact string).'
         },
         { type: 'text', text: `User request: ${prompt}` }
       ],

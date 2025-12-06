@@ -112,6 +112,78 @@ const OrdersList = ({ orders, loading, error, queried }) => {
   );
 };
 
+const startOfDay = (date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+
+const endOfDay = (date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+
+const deriveDateRangeFromQuery = (query, existingMin, existingMax) => {
+  let created_at_min = existingMin;
+  let created_at_max = existingMax;
+
+  if (created_at_min || created_at_max) {
+    return { created_at_min, created_at_max };
+  }
+
+  const lcQuery = query.toLowerCase();
+  const dayMs = 24 * 60 * 60 * 1000;
+  let rangeStart = null;
+  let rangeEnd = null;
+
+  const explicitDateMatch =
+    query.match(/\b\d{4}-\d{2}-\d{2}\b/) ||
+    query.match(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i);
+  if (explicitDateMatch) {
+    const parsed = Date.parse(explicitDateMatch[0]);
+    if (!Number.isNaN(parsed)) {
+      const parsedDate = new Date(parsed);
+      rangeStart = startOfDay(parsedDate);
+      rangeEnd = endOfDay(parsedDate);
+    }
+  } else if (lcQuery.includes('last year')) {
+    const now = new Date();
+    rangeStart = new Date(now.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
+    rangeEnd = new Date(now.getFullYear(), 0, 0, 23, 59, 59, 999);
+  } else if (lcQuery.includes('past year')) {
+    const now = new Date();
+    rangeStart = startOfDay(new Date(now.getTime() - 365 * dayMs));
+    rangeEnd = endOfDay(now);
+  } else if (lcQuery.includes('last month')) {
+    const now = new Date();
+    rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  } else if (
+    lcQuery.includes('past month') ||
+    /(past|last)\s+30\s+days/.test(lcQuery)
+  ) {
+    const now = new Date();
+    rangeStart = startOfDay(new Date(now.getTime() - 30 * dayMs));
+    rangeEnd = endOfDay(now);
+  } else if (
+    lcQuery.includes('last week') ||
+    lcQuery.includes('past week') ||
+    /(past|last)\s+7\s+days/.test(lcQuery)
+  ) {
+    const now = new Date();
+    rangeStart = startOfDay(new Date(now.getTime() - 7 * dayMs));
+    rangeEnd = endOfDay(now);
+  } else if (lcQuery.includes('yesterday')) {
+    const now = new Date();
+    rangeStart = startOfDay(new Date(now.getTime() - dayMs));
+    rangeEnd = endOfDay(new Date(now.getTime() - dayMs));
+  } else if (lcQuery.includes('today')) {
+    const now = new Date();
+    rangeStart = startOfDay(now);
+    rangeEnd = endOfDay(now);
+  }
+
+  return {
+    created_at_min: rangeStart ? rangeStart.toISOString() : created_at_min,
+    created_at_max: rangeEnd ? rangeEnd.toISOString() : created_at_max
+  };
+};
+
 function App() {
   const [status, setStatus] = useState('Loading…');
   const [logs, setLogs] = useState([]);
@@ -148,8 +220,19 @@ function App() {
         throw new Error('MCP client is not available');
       }
 
-      const limit = Math.max(1, Math.min(50, Number(queryParams.limit) || 5));
-      const result = await window.electronAPI.mcpListOrders({ ...queryParams, limit });
+      const normalizedLimit =
+        queryParams.limit !== undefined
+          ? Math.max(1, Math.min(50, Number(queryParams.limit)))
+          : undefined;
+
+      const requestPayload = { ...queryParams };
+      if (normalizedLimit && !Number.isNaN(normalizedLimit)) {
+        requestPayload.limit = normalizedLimit;
+      } else {
+        delete requestPayload.limit;
+      }
+
+      const result = await window.electronAPI.mcpListOrders(requestPayload);
       if (!result?.ok) {
         throw new Error(result?.error || 'MCP call failed');
       }
@@ -228,6 +311,14 @@ function App() {
     }, 300);
   };
 
+  const handleSaveQuery = () => {
+    if (!hasQueriedOrders || !orders.length) {
+      return;
+    }
+    const label = lastQueryLabel || (nlQuery && nlQuery.trim()) || 'Saved query';
+    addLog({ count: orders.length, label });
+  };
+
   const handleCodexOrders = async () => {
     if (!nlQuery.trim()) {
       return;
@@ -293,7 +384,7 @@ function App() {
       }
       // Fallback: if Codex didn't return a limit, try to extract a number from the query text
       let derivedLimit = params.limit;
-      if (!derivedLimit) {
+      if (derivedLimit === undefined || derivedLimit === null) {
         const match = nlQuery.match(/\b(\d{1,2})\b/);
         if (match) {
           derivedLimit = Number(match[1]);
@@ -311,31 +402,24 @@ function App() {
         }
       }
 
-      // Heuristic: derive "yesterday" date range if missing
-      let created_at_min = params.created_at_min;
-      let created_at_max = params.created_at_max;
-      const lcQuery = nlQuery.toLowerCase();
-      if (!created_at_min && !created_at_max && lcQuery.includes('yesterday')) {
-        const now = new Date();
-        const start = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() - 1,
-          0,
-          0,
-          0
-        );
-        const end = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() - 1,
-          23,
-          59,
-          59,
-          999
-        );
-        created_at_min = start.toISOString();
-        created_at_max = end.toISOString();
+      // Heuristic: extract email if Codex missed it
+      let derivedEmail = params.email;
+      if (!derivedEmail) {
+        const emailMatch = nlQuery.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        if (emailMatch) {
+          derivedEmail = emailMatch[0];
+        }
+      }
+
+      // Heuristic: extract SKU if Codex missed it (look for "sku ABC-123" patterns)
+      let derivedSku = params.sku;
+      if (!derivedSku) {
+        const skuMatch =
+          nlQuery.match(/sku\s*[:#]?\s*([A-Z0-9._-]{3,})/i)?.[1] ||
+          nlQuery.match(/\b[A-Z0-9][A-Z0-9._-]{2,}\b/)?.[0];
+        if (skuMatch) {
+          derivedSku = skuMatch;
+        }
       }
 
       const requestPayload = {
@@ -343,7 +427,7 @@ function App() {
         fulfillment_status: params.fulfillment_status,
         created_at_min,
         created_at_max,
-        email: params.email,
+        email: derivedEmail,
         order_id: params.order_id,
         order_number: derivedOrderNumber,
         customer_name: params.customer_name
