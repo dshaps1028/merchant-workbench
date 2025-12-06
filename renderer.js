@@ -93,6 +93,8 @@ function App() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState('');
+  const [nlQuery, setNlQuery] = useState('');
+  const [nlProcessing, setNlProcessing] = useState(false);
 
   useEffect(() => {
     setStatus('Ready');
@@ -104,14 +106,24 @@ function App() {
     setLog(formatLog(`Ping response: ${response}`));
   };
 
-  const handleFetchOrders = async () => {
+  const handleFetchOrders = async (queryParams = {}) => {
     setOrdersLoading(true);
     setOrdersError('');
     setStatus('Fetching orders…');
     setLog(formatLog('Fetching orders from MCP HTTP bridge…'));
 
     try {
-      const res = await fetch(`${ORDERS_ENDPOINT}?limit=5`);
+      const url = new URL(ORDERS_ENDPOINT);
+      const { limit, status: financial_status, since } = queryParams;
+      url.searchParams.set('limit', limit || 5);
+      if (financial_status) {
+        url.searchParams.set('financial_status', financial_status);
+      }
+      if (since) {
+        url.searchParams.set('processed_at_min', since);
+      }
+
+      const res = await fetch(url.toString());
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`HTTP ${res.status}: ${text}`);
@@ -127,6 +139,43 @@ function App() {
       setStatus('Error');
     } finally {
       setOrdersLoading(false);
+    }
+  };
+
+  const handleCodexOrders = async () => {
+    if (!nlQuery.trim()) {
+      return;
+    }
+    if (!window.electronAPI?.codexOrders) {
+      setOrdersError('Codex SDK is not available in this build.');
+      setStatus('Error');
+      return;
+    }
+
+    setNlProcessing(true);
+    setOrdersError('');
+    setStatus('Interpreting request…');
+    setLog(formatLog(`Sending to Codex: "${nlQuery.trim()}"`));
+
+    try {
+      const codexResponse = await window.electronAPI.codexOrders(nlQuery.trim());
+      if (!codexResponse?.ok) {
+        throw new Error(codexResponse?.error || 'Codex returned an error');
+      }
+
+      const params = codexResponse.data || {};
+      setLog(formatLog(`Codex mapped request to: ${JSON.stringify(params)}`));
+      await handleFetchOrders({
+        limit: params.limit,
+        status: params.status,
+        since: params.since
+      });
+    } catch (error) {
+      setOrdersError(error.message || 'Failed to process Codex request');
+      setStatus('Error');
+      setLog(formatLog(`Codex failed: ${error.message}`));
+    } finally {
+      setNlProcessing(false);
     }
   };
 
@@ -156,6 +205,33 @@ function App() {
             { style: { display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' } },
             h(ActionButton, { onClick: handleFetchOrders }, 'Fetch orders'),
             ordersLoading ? h('span', { className: 'order-sub' }, 'Loading…') : null
+          ),
+          h(
+            'div',
+            {
+              style: {
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'center',
+                marginBottom: '12px',
+                flexWrap: 'wrap'
+              }
+            },
+            h('input', {
+              type: 'text',
+              placeholder: 'Ask Codex: e.g., "show 3 pending orders from yesterday"',
+              value: nlQuery,
+              onChange: (event) => setNlQuery(event.target.value),
+              style: { flex: '1 1 240px' }
+            }),
+            h(
+              ActionButton,
+              {
+                onClick: handleCodexOrders,
+                disabled: nlProcessing || ordersLoading || !nlQuery.trim()
+              },
+              nlProcessing ? 'Working…' : 'Ask Codex'
+            )
           ),
           h(OrdersList, { orders, loading: ordersLoading, error: ordersError })
         ),

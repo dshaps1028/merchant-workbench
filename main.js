@@ -7,7 +7,10 @@ function createWindow() {
     height: 700,
     title: 'Merchant Workbench',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
     }
   });
 
