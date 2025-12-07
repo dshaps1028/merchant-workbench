@@ -40,8 +40,20 @@ const Panel = ({ title, description, id, children }) =>
 const ActionButton = ({ onClick, children, ...rest }) =>
   h('button', { onClick, ...rest }, children);
 
-const Modal = ({ order, onClose }) =>
-  h(
+const Modal = ({ order, onClose }) => {
+  if (!order) return null;
+  const safeOrder = {
+    name: order.name || order.id || 'Order',
+    id: order.id || 'N/A',
+    total_price: order.total_price || 'N/A',
+    currency: order.currency || '',
+    email: order.email || (order.customer && order.customer.email) || 'N/A',
+    financial_status: order.financial_status || 'unknown',
+    fulfillment_status: order.fulfillment_status || 'unfulfilled',
+    created_at: order.created_at,
+    line_items: Array.isArray(order.line_items) ? order.line_items : []
+  };
+  return h(
     'div',
     {
       style: {
@@ -97,23 +109,23 @@ const Modal = ({ order, onClose }) =>
       h(
         'p',
         { className: 'order-sub' },
-        `Status: ${order.financial_status || 'unknown'} / ${order.fulfillment_status || 'unfulfilled'}`
+        `Status: ${safeOrder.financial_status} / ${safeOrder.fulfillment_status}`
       ),
       h(
         'p',
         { className: 'order-sub' },
-        `Email: ${order.email || (order.customer && order.customer.email) || 'N/A'}`
+        `Email: ${safeOrder.email}`
       ),
       h(
         'p',
         { className: 'order-sub' },
-        `Total: ${order.total_price ? `$${order.total_price} ${order.currency || ''}` : '—'}`
+        `Total: ${safeOrder.total_price !== 'N/A' ? `$${safeOrder.total_price} ${safeOrder.currency}` : '—'}`
       ),
       h(
         'p',
         { className: 'order-sub' },
         `Date: ${
-          order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'
+          safeOrder.created_at ? new Date(safeOrder.created_at).toLocaleString() : 'N/A'
         }`
       ),
       h(
@@ -139,6 +151,7 @@ const Modal = ({ order, onClose }) =>
       )
     )
   );
+};
 
 const ScheduleModal = ({
   orderText,
@@ -475,6 +488,7 @@ function App() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [createSku, setCreateSku] = useState('');
+  const [createVariantId, setCreateVariantId] = useState('');
   const [createQuantity, setCreateQuantity] = useState(1);
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState([]);
@@ -649,13 +663,24 @@ function App() {
       setStatus('Error');
       return;
     }
+    const variantIdNum = createVariantId ? Number(createVariantId) : null;
     const effectiveDraft = draftOverride || {
-      line_items: [{ sku: createSku.trim(), quantity: Math.max(1, Number(createQuantity) || 1) }],
+      line_items: [
+        {
+          sku: createSku.trim() || undefined,
+          variant_id: variantIdNum || undefined,
+          quantity: Math.max(1, Number(createQuantity) || 1)
+        }
+      ],
       note: schedulerQuery.trim() || undefined,
       test: true
     };
-    if (!effectiveDraft.line_items || !effectiveDraft.line_items.length || !effectiveDraft.line_items[0].sku) {
-      setOrdersError('Please select a product (SKU) first.');
+    if (
+      !effectiveDraft.line_items ||
+      !effectiveDraft.line_items.length ||
+      (!effectiveDraft.line_items[0].sku && !effectiveDraft.line_items[0].variant_id)
+    ) {
+      setOrdersError('Please select a product/variant first.');
       setStatus('Error');
       return;
     }
@@ -664,14 +689,33 @@ function App() {
     setSchedulerProcessing(true);
     try {
       const payload = { ...effectiveDraft, test: true };
+      console.log('[orders] create_order payload:', JSON.stringify(payload, null, 2));
       const result = await window.electronAPI.mcpCreateOrder(payload);
       if (!result?.ok) {
+        console.error('[orders] create_order failed:', result);
         throw new Error(result?.error || 'Failed to create order');
       }
+      console.log('[orders] create_order result:', result);
       if (result.order) {
+        const { id, name, total_price, currency } = result.order;
         setOrders([result.order]);
         setHasQueriedOrders(true);
         setSelectedOrder(result.order);
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `Order created: ${name || id} • Total: ${total_price || 'N/A'} ${currency || ''}`
+          }
+        ]);
+        alert(`Order created: ${name || id}`);
+      } else {
+        setOrders([]);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: 'Order created (no order object returned).' }
+        ]);
+        alert('Order created, but no order details were returned.');
       }
       setStatus('Ready');
       setShowScheduleModal(false);
@@ -682,8 +726,13 @@ function App() {
       setProductError('');
       setPendingDraft(null);
     } catch (error) {
+      console.error('[orders] create_order error:', error);
       setOrdersError(error.message || 'Failed to create order');
       setStatus('Error');
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: `Order creation failed: ${error?.message || 'Unknown error'}` }
+      ]);
     } finally {
       setSchedulerProcessing(false);
     }
@@ -814,11 +863,21 @@ function App() {
       const assistantMessages = [];
       let summaryParts = [];
       const draft = {
-        line_items: createSku ? [{ sku: createSku, quantity: createQuantity }] : [],
+        line_items:
+          createSku || createVariantId
+            ? [
+                {
+                  sku: createSku || undefined,
+                  variant_id: createVariantId ? Number(createVariantId) : undefined,
+                  quantity: createQuantity
+                }
+              ]
+            : [],
         note: schedulerQuery || ''
       };
       const result = await window.electronAPI.codexOrderComposer(trimmed, draft);
       if (!result?.ok) {
+        console.error('[order-chat] codexOrderComposer error result:', result);
         throw new Error(result?.error || 'Codex order composer failed');
       }
       const raw = result.data || {};
@@ -844,8 +903,9 @@ function App() {
           const first = data.line_items[0];
           if (first.sku) {
             setCreateSku(first.sku);
-          } else if (first.variant_id) {
-            setCreateSku(String(first.variant_id));
+          }
+          if (first.variant_id) {
+            setCreateVariantId(String(first.variant_id));
           }
           if (first.quantity) setCreateQuantity(first.quantity);
         }
@@ -857,13 +917,20 @@ function App() {
       assistantMessages.push({ role: 'assistant', text: combinedReply });
       if (data.action === 'submit' && data.confirm_submit) {
         const summaryLine =
-          createSku && createQuantity
-            ? `About to submit: SKU ${createSku} x ${createQuantity}. Please confirm to submit.`
+          (createSku || createVariantId) && createQuantity
+            ? `About to submit: SKU ${createSku || 'N/A'} / Variant ${createVariantId || 'N/A'} x ${createQuantity}. Please confirm to submit.`
             : 'Draft is ready. Please confirm to submit.';
         setPendingDraft({
-          line_items: createSku
-            ? [{ sku: createSku.trim(), quantity: Math.max(1, Number(createQuantity) || 1) }]
-            : draft.line_items,
+          line_items:
+            createSku || createVariantId
+              ? [
+                  {
+                    sku: createSku ? createSku.trim() : undefined,
+                    variant_id: createVariantId ? Number(createVariantId) : undefined,
+                    quantity: Math.max(1, Number(createQuantity) || 1)
+                  }
+                ]
+              : draft.line_items,
           note: schedulerQuery.trim() || undefined
         });
         assistantMessages.push({ role: 'assistant', text: summaryLine });
