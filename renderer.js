@@ -477,6 +477,7 @@ function App() {
   const [status, setStatus] = useState('Loading…');
   const [logs, setLogs] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [createdOrders, setCreatedOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState('');
   const [hasQueriedOrders, setHasQueriedOrders] = useState(false);
@@ -698,8 +699,7 @@ function App() {
       console.log('[orders] create_order result:', result);
       if (result.order) {
         const { id, name, total_price, currency } = result.order;
-        setOrders([result.order]);
-        setHasQueriedOrders(true);
+        setCreatedOrders((prev) => [result.order, ...prev]);
         setSelectedOrder(result.order);
         setChatMessages((prev) => [
           ...prev,
@@ -710,7 +710,6 @@ function App() {
         ]);
         alert(`Order created: ${name || id}`);
       } else {
-        setOrders([]);
         setChatMessages((prev) => [
           ...prev,
           { role: 'assistant', text: 'Order created (no order object returned).' }
@@ -1295,16 +1294,22 @@ function App() {
               )
             )
           ),
+          createdOrders.length
+            ? h(
+                Panel,
+                { title: 'RECENTLY CREATED ORDERS', description: 'Orders you just created' },
+                h(OrdersList, {
+                  orders: createdOrders,
+                  loading: false,
+                  error: '',
+                  queried: true,
+                  onSelect: setSelectedOrder
+                })
+              )
+            : null,
           selectedOrder
             ? h(Modal, { order: selectedOrder, onClose: () => setSelectedOrder(null) })
             : null,
-          h(OrdersList, {
-            orders,
-            loading: ordersLoading,
-            error: ordersError,
-            queried: hasQueriedOrders,
-            onSelect: setSelectedOrder
-          }),
           h(
             Panel,
             {
