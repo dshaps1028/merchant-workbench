@@ -379,6 +379,31 @@ const mcpCreateOrder = async (params) => {
   }
 };
 
+const mcpUpdateOrder = async (params) => {
+  try {
+    const { client } = await getMcpClient();
+    const result = await client.callTool({
+      name: 'update_order',
+      arguments: params
+    });
+
+    const order =
+      (result.structuredContent && result.structuredContent.order) ||
+      (result.content || [])
+        .flatMap((item) => item.json?.order || item.text?.order || [])
+        .find(Boolean);
+
+    return {
+      ok: true,
+      order: order || null,
+      text: (result.content && result.content.map((c) => c.text).filter(Boolean).join('\n')) || ''
+    };
+  } catch (error) {
+    console.error('[preload] MCP update_order failed:', error);
+    return { ok: false, error: error?.message || 'MCP update_order failed' };
+  }
+};
+
 const mcpSearchProducts = async (params) => {
   try {
     const { client } = await getMcpClient();
@@ -435,6 +460,7 @@ const api = {
   codexOrderComposer,
   mcpListOrders,
   mcpCreateOrder,
+  mcpUpdateOrder,
   mcpSearchProducts,
   mcpListProducts
 };

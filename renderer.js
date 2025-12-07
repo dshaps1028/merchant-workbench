@@ -306,6 +306,170 @@ const ScheduleModal = ({
     )
   );
 
+const EditOrdersModal = ({
+  open,
+  onClose,
+  orderCount,
+  messages,
+  onSendMessage,
+  onInputChange,
+  inputValue,
+  submitting,
+  messagesEndRef
+}) => {
+  if (!open) return null;
+  const title = orderCount === 1 ? 'Edit Order' : 'Edit Orders';
+  return h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(6px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: 'rgba(255,255,255,0.12)',
+          color: '#e8f4ec',
+          borderRadius: '6px',
+          padding: '20px',
+          width: 'min(1040px, 90vw)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
+          position: 'relative'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#000',
+            borderRadius: '6px',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#e8f4ec',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }
+        },
+        '✕'
+      ),
+      h('h2', null, title),
+      h(
+        'p',
+        { className: 'order-sub', style: { marginTop: 0 } },
+        orderCount === 1
+          ? 'Tell me what to change for this order.'
+          : 'Tell me what to change for these orders in bulk.'
+      ),
+      h(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            paddingRight: '4px'
+          }
+        },
+        h(
+          'div',
+          {
+            style: {
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '6px',
+              padding: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }
+          },
+          messages.map((m, idx) =>
+            h(
+              'div',
+              {
+                key: idx,
+                style: {
+                  alignSelf: m.role === 'assistant' ? 'flex-start' : 'flex-end',
+                  background: m.role === 'assistant' ? '#f1f4f2' : 'rgba(149,191,72,0.2)',
+                  padding: '8px 10px',
+                  borderRadius: '6px'
+                }
+              },
+              h(
+                'p',
+                { className: 'order-sub', style: { margin: 0, whiteSpace: 'pre-wrap', color: '#0f1b14' } },
+                m.text
+              )
+            )
+          )
+        ),
+        h('div', { ref: messagesEndRef })
+      ),
+      h(
+        'div',
+        { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+        h('input', {
+          type: 'text',
+          value: inputValue,
+          onChange: (e) => onInputChange(e.target.value),
+          placeholder: 'Describe the edits you want…',
+          style: {
+            flex: '1 1 auto',
+            padding: '10px 12px',
+            borderRadius: '6px',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.06)',
+            color: '#e8f4ec'
+          },
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') {
+              onSendMessage(inputValue);
+            }
+          },
+          disabled: submitting
+        }),
+        h(
+          'button',
+          {
+            onClick: () => onSendMessage(inputValue),
+            disabled: submitting || !inputValue.trim(),
+            style: {
+              padding: '10px 14px',
+              borderRadius: '6px',
+              background: submitting ? 'rgba(255,255,255,0.3)' : '#000',
+              color: '#fff',
+              fontWeight: 700,
+              letterSpacing: '0.3px',
+              cursor: submitting || !inputValue.trim() ? 'not-allowed' : 'pointer'
+            }
+          },
+          submitting ? 'Working…' : 'Send'
+        )
+      )
+    )
+  );
+};
+
 const LogList = ({ entries }) =>
   h(
     'ul',
@@ -503,13 +667,26 @@ function App() {
     { role: 'assistant', text: 'Tell me the order you want to create. I can search products and build the draft.' }
   ]);
   const [pendingDraft, setPendingDraft] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editMessages, setEditMessages] = useState([
+    { role: 'assistant', text: 'Tell me what to change for these orders (email, addresses, tags, note, status).' }
+  ]);
+  const [editInput, setEditInput] = useState('');
+  const [editProcessing, setEditProcessing] = useState(false);
   const messagesEndRef = useRef(null);
+  const editMessagesEndRef = useRef(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [chatMessages]);
+
+  useEffect(() => {
+    if (editMessagesEndRef.current) {
+      editMessagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [editMessages, showEditModal]);
 
   useEffect(() => {
     setStatus('Ready');
@@ -523,6 +700,71 @@ function App() {
   };
 
   const handleAction = () => {};
+
+  const handleEditSendMessage = async (text) => {
+    if (!text || !text.trim()) return;
+    const trimmed = text.trim();
+    setEditMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
+    const lower = trimmed.toLowerCase();
+    const hasQuestion = trimmed.includes('?');
+    const parsedTags =
+      lower.includes('tag') && /tag/i.test(trimmed) ? parseTagList(trimmed) : [];
+    setEditProcessing(true);
+
+    // If tags mentioned but none parsed, ask for them.
+    if (lower.includes('tag') && parsedTags.length === 0) {
+      setEditMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text:
+            'Which tags should I add (or remove)? Provide a comma-separated list, and tell me if they should replace existing tags or be appended.'
+        }
+      ]);
+      setEditProcessing(false);
+      setEditInput('');
+      return;
+    }
+
+    // Apply tag updates if parsed and orders available.
+    if (parsedTags.length && orders.length) {
+      const tagString = parsedTags.join(', ');
+      try {
+        for (const order of orders) {
+          await window.electronAPI.mcpUpdateOrder({
+            order_id: order.id,
+            tags: tagString
+          });
+        }
+        setEditMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `Tags "${tagString}" applied to ${orders.length} order${orders.length === 1 ? '' : 's'}.`
+          }
+        ]);
+      } catch (error) {
+        setEditMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `I tried to update the orders but hit an error: ${error?.message || 'unknown error'}.`
+          }
+        ]);
+      }
+      setEditProcessing(false);
+      setEditInput('');
+      return;
+    }
+
+    // Generic Q&A/acknowledgement
+    const assistantText = hasQuestion
+      ? 'Let me know the field(s) you want to view or change (email, tags, note, addresses), and I will handle it.'
+      : 'Tell me the edits to apply (e.g., add tag VIP, update note, change email/address), and I will confirm once done.';
+    setEditMessages((prev) => [...prev, { role: 'assistant', text: assistantText }]);
+    setEditProcessing(false);
+    setEditInput('');
+  };
 
   const sanitizeAddress = (addr) => {
     if (!addr || typeof addr !== 'object') return null;
@@ -538,6 +780,51 @@ function App() {
     };
     const hasValue = Object.values(cleaned).some((v) => v && String(v).trim());
     return hasValue ? cleaned : null;
+  };
+
+  const parseTagList = (text) => {
+    const tags = new Set();
+    const quoted = [...text.matchAll(/["']([^"']+)["']/g)].map((m) => m[1].trim());
+    quoted.forEach((t) => t && tags.add(t));
+
+    const stopWords = new Set([
+      'to',
+      'these',
+      'those',
+      'orders',
+      'order',
+      'please',
+      'the',
+      'my',
+      'a',
+      'an',
+      'and',
+      'with',
+      'for',
+      'add',
+      'apply',
+      'update',
+      'change',
+      'set',
+      'tag',
+      'tags'
+    ]);
+
+    const parts = text
+      .split(/tag[s]?:?/i)
+      .slice(1)
+      .join(' ')
+      .split(/[,|\s]+/);
+    parts.forEach((p) => {
+      const cleaned = p.trim().replace(/[?!.]/g, '');
+      if (!cleaned) return;
+      if (stopWords.has(cleaned.toLowerCase())) return;
+      if (/^[A-Za-z0-9_-]+$/.test(cleaned)) {
+        tags.add(cleaned);
+      }
+    });
+
+    return Array.from(tags);
   };
 
   const handleFetchOrders = async (queryParams = {}) => {
@@ -1368,6 +1655,17 @@ function App() {
           selectedOrder
             ? h(Modal, { order: selectedOrder, onClose: () => setSelectedOrder(null) })
             : null,
+          h(EditOrdersModal, {
+            open: showEditModal,
+            onClose: () => setShowEditModal(false),
+            orderCount: orders.length,
+            messages: editMessages,
+            onSendMessage: handleEditSendMessage,
+            onInputChange: setEditInput,
+            inputValue: editInput,
+            submitting: editProcessing,
+            messagesEndRef: editMessagesEndRef
+          }),
           h(
             Panel,
             {
@@ -1412,7 +1710,11 @@ function App() {
                     marginBottom: '12px'
                   }
                 },
-                h(ActionButton, { onClick: handleSaveQuery }, 'Save Query & Results')
+                h(
+                  ActionButton,
+                  { onClick: () => setShowEditModal(true) },
+                  orders.length === 1 ? 'Edit Order' : 'Edit Orders'
+                )
               )
             : null,
           h(OrdersList, {
