@@ -491,6 +491,9 @@ function App() {
   const [createSku, setCreateSku] = useState('');
   const [createVariantId, setCreateVariantId] = useState('');
   const [createQuantity, setCreateQuantity] = useState(1);
+  const [createEmail, setCreateEmail] = useState('');
+  const [shippingAddress, setShippingAddress] = useState(null);
+  const [billingAddress, setBillingAddress] = useState(null);
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState([]);
   const [productLoading, setProductLoading] = useState(false);
@@ -520,6 +523,22 @@ function App() {
   };
 
   const handleAction = () => {};
+
+  const sanitizeAddress = (addr) => {
+    if (!addr || typeof addr !== 'object') return null;
+    const cleaned = {
+      name: addr.name || addr.first_name || '',
+      address1: addr.address1 || '',
+      address2: addr.address2 || '',
+      city: addr.city || '',
+      province: addr.province || addr.province_code || '',
+      zip: addr.zip || '',
+      country: addr.country || addr.country_code || '',
+      phone: addr.phone || ''
+    };
+    const hasValue = Object.values(cleaned).some((v) => v && String(v).trim());
+    return hasValue ? cleaned : null;
+  };
 
   const handleFetchOrders = async (queryParams = {}) => {
     setOrdersLoading(true);
@@ -665,6 +684,12 @@ function App() {
       return;
     }
     const variantIdNum = createVariantId ? Number(createVariantId) : null;
+    const cleanedShipping = sanitizeAddress(
+      draftOverride?.shipping_address || shippingAddress
+    );
+    const cleanedBilling = sanitizeAddress(
+      draftOverride?.billing_address || billingAddress || cleanedShipping
+    );
     const effectiveDraft = draftOverride || {
       line_items: [
         {
@@ -673,6 +698,9 @@ function App() {
           quantity: Math.max(1, Number(createQuantity) || 1)
         }
       ],
+      email: createEmail.trim() || undefined,
+      shipping_address: cleanedShipping || undefined,
+      billing_address: cleanedBilling || undefined,
       note: schedulerQuery.trim() || undefined,
       test: true
     };
@@ -689,7 +717,16 @@ function App() {
     setStatus('Creating order…');
     setSchedulerProcessing(true);
     try {
-      const payload = { ...effectiveDraft, test: true };
+      const payload = {
+        ...effectiveDraft,
+        email: effectiveDraft.email || createEmail.trim() || undefined,
+        shipping_address:
+          sanitizeAddress(effectiveDraft.shipping_address || shippingAddress) || undefined,
+        billing_address:
+          sanitizeAddress(effectiveDraft.billing_address || billingAddress || shippingAddress) ||
+          undefined,
+        test: true
+      };
       console.log('[orders] create_order payload:', JSON.stringify(payload, null, 2));
       const result = await window.electronAPI.mcpCreateOrder(payload);
       if (!result?.ok) {
@@ -720,6 +757,9 @@ function App() {
       setShowScheduleModal(false);
       setCreateSku('');
       setCreateQuantity(1);
+      setCreateEmail('');
+      setShippingAddress(null);
+      setBillingAddress(null);
       setProductQuery('');
       setProductResults([]);
       setProductError('');
@@ -872,7 +912,10 @@ function App() {
                 }
               ]
             : [],
-        note: schedulerQuery || ''
+        note: schedulerQuery || '',
+        email: createEmail || null,
+        shipping_address: shippingAddress || null,
+        billing_address: billingAddress || null
       };
       const result = await window.electronAPI.codexOrderComposer(trimmed, draft);
       if (!result?.ok) {
@@ -891,6 +934,18 @@ function App() {
             })()
           : raw;
       console.log('[order-chat] codex composer data:', data);
+      if (data.email) {
+        setCreateEmail(String(data.email).trim());
+      }
+      const nextShipping = data.shipping_address ? sanitizeAddress(data.shipping_address) : null;
+      const nextBilling = data.billing_address
+        ? sanitizeAddress(data.billing_address)
+        : null;
+      if (nextShipping) setShippingAddress(nextShipping);
+      if (nextBilling) setBillingAddress(nextBilling);
+      if (data.note && String(data.note).trim()) {
+        setSchedulerQuery(String(data.note).trim());
+      }
       let combinedReply = data.reply ? String(data.reply) : '';
       setShowScheduleModal(true);
       if (data.action === 'search') {
@@ -930,7 +985,10 @@ function App() {
                   }
                 ]
               : draft.line_items,
-          note: schedulerQuery.trim() || undefined
+          note: schedulerQuery.trim() || undefined,
+          email: data.email || createEmail || undefined,
+          shipping_address: nextShipping || shippingAddress || undefined,
+          billing_address: nextBilling || billingAddress || nextShipping || undefined
         });
         assistantMessages.push({ role: 'assistant', text: summaryLine });
         setSchedulerProcessing(false);

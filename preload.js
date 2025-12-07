@@ -159,11 +159,53 @@ const codexOrderComposer = async (prompt, draft) => {
           },
           nullable: true
         },
+        shipping_address: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', nullable: true },
+            address1: { type: 'string', nullable: true },
+            address2: { type: 'string', nullable: true },
+            city: { type: 'string', nullable: true },
+            province: { type: 'string', nullable: true },
+            zip: { type: 'string', nullable: true },
+            country: { type: 'string', nullable: true },
+            phone: { type: 'string', nullable: true }
+          },
+          required: ['name', 'address1', 'address2', 'city', 'province', 'zip', 'country', 'phone'],
+          additionalProperties: false,
+          nullable: true
+        },
+        billing_address: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', nullable: true },
+            address1: { type: 'string', nullable: true },
+            address2: { type: 'string', nullable: true },
+            city: { type: 'string', nullable: true },
+            province: { type: 'string', nullable: true },
+            zip: { type: 'string', nullable: true },
+            country: { type: 'string', nullable: true },
+            phone: { type: 'string', nullable: true }
+          },
+          required: ['name', 'address1', 'address2', 'city', 'province', 'zip', 'country', 'phone'],
+          additionalProperties: false,
+          nullable: true
+        },
         email: { type: 'string', nullable: true },
         note: { type: 'string', nullable: true },
         confirm_submit: { type: 'boolean', nullable: true }
       },
-      required: ['reply', 'action', 'search_query', 'line_items', 'email', 'note', 'confirm_submit'],
+      required: [
+        'reply',
+        'action',
+        'search_query',
+        'line_items',
+        'shipping_address',
+        'billing_address',
+        'email',
+        'note',
+        'confirm_submit'
+      ],
       additionalProperties: false
     };
 
@@ -175,6 +217,7 @@ const codexOrderComposer = async (prompt, draft) => {
             'You are an order creation assistant. Maintain a draft order from conversation. ' +
             'Use action=search when you need product info (provide search_query). ' +
             'Use action=update_draft with line_items/email/note when updating the draft. ' +
+            'Capture shipping_address and billing_address as structured objects (name, address1, address2, city, province, zip, country, phone) whenever the user provides an address; set the field to null when not provided. ' +
             'If required details are missing (SKU or variant, quantity, customer email, shipping/billing info), ask for them explicitly before attempting to submit and wait for the answer. ' +
             'Before submitting, summarize the draft (items, qty, SKU/variant) and ask the user to confirm. ' +
             'Use action=submit only after the user has clearly confirmed creation; set confirm_submit=true in that case. ' +
