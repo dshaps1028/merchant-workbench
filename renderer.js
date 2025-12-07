@@ -1,4 +1,4 @@
-const { useEffect, useState } = React;
+const { useEffect, useState, useRef } = React;
 const h = React.createElement;
 
 const Shell = ({ children }) => h('div', { className: 'shell' }, children);
@@ -37,66 +37,23 @@ const Panel = ({ title, description, id, children }) =>
     children
   );
 
-const Modal = ({ children, onClose }) =>
-  h(
-    'div',
-    {
-      style: {
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '20px'
-      },
-      onClick: onClose
-    },
-    h(
-      'div',
-      {
-        style: {
-          background: 'rgba(149, 191, 72, 0.9)',
-          color: '#000',
-          borderRadius: '12px',
-          padding: '24px',
-          width: 'min(720px, 92vw)',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          boxShadow: '0 18px 40px rgba(0,0,0,0.38)',
-          position: 'relative'
-        },
-        onClick: (e) => e.stopPropagation()
-      },
-      h(
-        'button',
-        {
-          onClick: onClose,
-          style: {
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            background: '#000',
-            borderRadius: '50%',
-            width: '28px',
-            height: '28px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }
-        },
-        '✕'
-      ),
-      children
-    )
-  );
-
 const ActionButton = ({ onClick, children, ...rest }) =>
   h('button', { onClick, ...rest }, children);
 
-const Modal = ({ order, onClose }) =>
-  h(
+const Modal = ({ order, onClose }) => {
+  if (!order) return null;
+  const safeOrder = {
+    name: order.name || order.id || 'Order',
+    id: order.id || 'N/A',
+    total_price: order.total_price || 'N/A',
+    currency: order.currency || '',
+    email: order.email || (order.customer && order.customer.email) || 'N/A',
+    financial_status: order.financial_status || 'unknown',
+    fulfillment_status: order.fulfillment_status || 'unfulfilled',
+    created_at: order.created_at,
+    line_items: Array.isArray(order.line_items) ? order.line_items : []
+  };
+  return h(
     'div',
     {
       style: {
@@ -117,7 +74,7 @@ const Modal = ({ order, onClose }) =>
         style: {
           background: '#0f2a1f',
           color: '#e8f4ec',
-          borderRadius: '12px',
+          borderRadius: '6px',
           padding: '20px',
           width: 'min(720px, 92vw)',
           maxHeight: '85vh',
@@ -136,7 +93,7 @@ const Modal = ({ order, onClose }) =>
             top: '10px',
             right: '10px',
             background: '#000',
-            borderRadius: '50%',
+            borderRadius: '6px',
             width: '28px',
             height: '28px',
             display: 'flex',
@@ -152,23 +109,23 @@ const Modal = ({ order, onClose }) =>
       h(
         'p',
         { className: 'order-sub' },
-        `Status: ${order.financial_status || 'unknown'} / ${order.fulfillment_status || 'unfulfilled'}`
+        `Status: ${safeOrder.financial_status} / ${safeOrder.fulfillment_status}`
       ),
       h(
         'p',
         { className: 'order-sub' },
-        `Email: ${order.email || (order.customer && order.customer.email) || 'N/A'}`
+        `Email: ${safeOrder.email}`
       ),
       h(
         'p',
         { className: 'order-sub' },
-        `Total: ${order.total_price ? `$${order.total_price} ${order.currency || ''}` : '—'}`
+        `Total: ${safeOrder.total_price !== 'N/A' ? `$${safeOrder.total_price} ${safeOrder.currency}` : '—'}`
       ),
       h(
         'p',
         { className: 'order-sub' },
         `Date: ${
-          order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'
+          safeOrder.created_at ? new Date(safeOrder.created_at).toLocaleString() : 'N/A'
         }`
       ),
       h(
@@ -194,15 +151,25 @@ const Modal = ({ order, onClose }) =>
       )
     )
   );
+};
 
-const ScheduleModal = ({ query, onClose }) =>
+const ScheduleModal = ({
+  orderText,
+  onClose,
+  submitting,
+  messages,
+  onSendMessage,
+  onInputChange,
+  messagesEndRef
+}) =>
   h(
     'div',
     {
       style: {
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.6)',
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -215,12 +182,13 @@ const ScheduleModal = ({ query, onClose }) =>
       'div',
       {
         style: {
-          background: '#0f2a1f',
+          background: 'rgba(255,255,255,0.12)',
           color: '#e8f4ec',
-          borderRadius: '12px',
+          borderRadius: '6px',
           padding: '20px',
-          width: 'min(520px, 90vw)',
-          boxShadow: '0 14px 32px rgba(0,0,0,0.35)',
+          width: 'min(1040px, 90vw)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
           position: 'relative'
         },
         onClick: (e) => e.stopPropagation()
@@ -234,7 +202,7 @@ const ScheduleModal = ({ query, onClose }) =>
             top: '10px',
             right: '10px',
             background: '#000',
-            borderRadius: '50%',
+            borderRadius: '6px',
             width: '28px',
             height: '28px',
             display: 'flex',
@@ -248,33 +216,92 @@ const ScheduleModal = ({ query, onClose }) =>
       ),
       h('h2', null, 'Create Order'),
       h(
-        'p',
-        { className: 'order-sub' },
-        query && query.trim()
-          ? `Requested: ${query.trim()}`
-          : 'Describe the order you want to create.'
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            paddingRight: '4px'
+          }
+        },
+        h(
+          'div',
+          {
+            style: {
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '6px',
+              padding: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }
+          },
+          messages.map((m, idx) =>
+            h(
+              'div',
+              {
+            key: idx,
+            style: {
+              alignSelf: m.role === 'assistant' ? 'flex-start' : 'flex-end',
+              background: m.role === 'assistant' ? '#f1f4f2' : 'rgba(149,191,72,0.2)',
+              padding: '8px 10px',
+              borderRadius: '6px'
+            }
+          },
+          h(
+            'p',
+            { className: 'order-sub', style: { margin: 0, whiteSpace: 'pre-wrap', color: '#0f1b14' } },
+            m.text
+          )
+          )
+        )
       ),
-      h(
-        'p',
-        { className: 'order-sub' },
-        'Order creation via AI is coming soon. Close this dialog to continue.'
+        h('div', { ref: messagesEndRef })
       ),
       h(
         'div',
-        { style: { marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' } },
-        h('label', { htmlFor: 'create-order-notes', className: 'order-sub' }, 'Notes'),
+        { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
         h('input', {
-          id: 'create-order-notes',
+          id: 'create-order-text',
           type: 'text',
-          placeholder: 'Add any notes for this order...',
+          value: orderText,
+          onChange: (e) => onInputChange(e.target.value),
+          placeholder: 'Tell me the order you want to create…',
           style: {
+            flex: '1 1 auto',
             padding: '10px 12px',
-            borderRadius: '8px',
+            borderRadius: '6px',
             border: '1px solid rgba(255,255,255,0.12)',
             background: 'rgba(255,255,255,0.06)',
             color: '#e8f4ec'
-          }
-        })
+          },
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') {
+              onSendMessage(orderText);
+            }
+          },
+          disabled: submitting
+        }),
+        h(
+          'button',
+          {
+            onClick: () => onSendMessage(orderText),
+            disabled: submitting || !orderText.trim(),
+            style: {
+              padding: '10px 14px',
+              borderRadius: '6px',
+              background: submitting ? 'rgba(255,255,255,0.3)' : '#000',
+              color: '#fff',
+              fontWeight: 700,
+              letterSpacing: '0.3px',
+              cursor: submitting || !orderText.trim() ? 'not-allowed' : 'pointer'
+            }
+          },
+          submitting ? 'Working…' : 'Send'
+        )
       )
     )
   );
@@ -460,6 +487,25 @@ function App() {
   const [lastQueryLabel, setLastQueryLabel] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [createSku, setCreateSku] = useState('');
+  const [createVariantId, setCreateVariantId] = useState('');
+  const [createQuantity, setCreateQuantity] = useState(1);
+  const [productQuery, setProductQuery] = useState('');
+  const [productResults, setProductResults] = useState([]);
+  const [productLoading, setProductLoading] = useState(false);
+  const [productError, setProductError] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', text: 'Tell me the order you want to create. I can search products and build the draft.' }
+  ]);
+  const [pendingDraft, setPendingDraft] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     setStatus('Ready');
@@ -606,14 +652,326 @@ function App() {
   };
 
   const handleSchedule = async () => {
-    setSchedulerProcessing(true);
-    setStatus('Preparing schedule…');
+    setSchedulerProcessing(false);
+    setStatus('Ready');
     setShowScheduleModal(true);
-    // Placeholder for future MCP tool to create recurring exports
-    setTimeout(() => {
+  };
+
+  const handleCreateOrder = async (draftOverride) => {
+    if (!window.electronAPI?.mcpCreateOrder) {
+      setOrdersError('Order creation tool is not available.');
+      setStatus('Error');
+      return;
+    }
+    const variantIdNum = createVariantId ? Number(createVariantId) : null;
+    const effectiveDraft = draftOverride || {
+      line_items: [
+        {
+          sku: createSku.trim() || undefined,
+          variant_id: variantIdNum || undefined,
+          quantity: Math.max(1, Number(createQuantity) || 1)
+        }
+      ],
+      note: schedulerQuery.trim() || undefined,
+      test: true
+    };
+    if (
+      !effectiveDraft.line_items ||
+      !effectiveDraft.line_items.length ||
+      (!effectiveDraft.line_items[0].sku && !effectiveDraft.line_items[0].variant_id)
+    ) {
+      setOrdersError('Please select a product/variant first.');
+      setStatus('Error');
+      return;
+    }
+    setOrdersError('');
+    setStatus('Creating order…');
+    setSchedulerProcessing(true);
+    try {
+      const payload = { ...effectiveDraft, test: true };
+      console.log('[orders] create_order payload:', JSON.stringify(payload, null, 2));
+      const result = await window.electronAPI.mcpCreateOrder(payload);
+      if (!result?.ok) {
+        console.error('[orders] create_order failed:', result);
+        throw new Error(result?.error || 'Failed to create order');
+      }
+      console.log('[orders] create_order result:', result);
+      if (result.order) {
+        const { id, name, total_price, currency } = result.order;
+        setOrders([result.order]);
+        setHasQueriedOrders(true);
+        setSelectedOrder(result.order);
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `Order created: ${name || id} • Total: ${total_price || 'N/A'} ${currency || ''}`
+          }
+        ]);
+        alert(`Order created: ${name || id}`);
+      } else {
+        setOrders([]);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: 'Order created (no order object returned).' }
+        ]);
+        alert('Order created, but no order details were returned.');
+      }
       setStatus('Ready');
+      setShowScheduleModal(false);
+      setCreateSku('');
+      setCreateQuantity(1);
+      setProductQuery('');
+      setProductResults([]);
+      setProductError('');
+      setPendingDraft(null);
+    } catch (error) {
+      console.error('[orders] create_order error:', error);
+      setOrdersError(error.message || 'Failed to create order');
+      setStatus('Error');
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: `Order creation failed: ${error?.message || 'Unknown error'}` }
+      ]);
+    } finally {
       setSchedulerProcessing(false);
-    }, 300);
+    }
+  };
+
+  const handleProductSearch = async (overrideQuery) => {
+    if (!window.electronAPI?.mcpSearchProducts) {
+      setProductError('Product search tool is not available.');
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: 'Product search tool is not available right now.' }
+      ]);
+      return;
+    }
+    const queryValue = overrideQuery !== undefined ? overrideQuery : productQuery;
+    const cleanedQuery = (queryValue || '').trim();
+    setProductError('');
+    setProductQuery(cleanedQuery);
+    setProductLoading(true);
+    try {
+      let products = [];
+      let resultText = '';
+
+      if (!cleanedQuery && window.electronAPI?.mcpListProducts) {
+        const listResult = await window.electronAPI.mcpListProducts({ limit: 50 });
+        if (!listResult?.ok) throw new Error(listResult?.error || 'Product list failed');
+        products = listResult.products || [];
+        resultText = (listResult.text || '').trim();
+        console.log('[order-chat] list_products results:', {
+          count: products.length,
+          titles: products.slice(0, 5).map((p) => p.title || p.handle || p.id),
+          text: resultText
+        });
+      } else {
+        const result = await window.electronAPI.mcpSearchProducts({
+          query: cleanedQuery,
+          limit: 10
+        });
+        if (!result?.ok) {
+          throw new Error(result?.error || 'Product search failed');
+        }
+        resultText = (result.text || '').trim();
+        products = result.products || [];
+        console.log('[order-chat] product search results:', {
+          query: cleanedQuery,
+          count: products.length,
+          titles: products.slice(0, 5).map((p) => p.title || p.handle || p.id),
+          text: resultText
+        });
+
+        if ((!cleanedQuery || products.length === 0) && window.electronAPI?.mcpListProducts) {
+          const listResult = await window.electronAPI.mcpListProducts({ limit: 50 });
+          if (listResult?.ok && Array.isArray(listResult.products)) {
+            products = listResult.products;
+            resultText = resultText || (listResult.text || '').trim();
+            console.log('[order-chat] fallback list_products results:', {
+              count: products.length,
+              titles: products.slice(0, 5).map((p) => p.title || p.handle || p.id)
+            });
+          } else if (listResult?.text) {
+            resultText = resultText || listResult.text;
+            console.log('[order-chat] fallback list_products text:', listResult.text);
+          }
+        }
+      }
+
+      setProductResults(products);
+
+      const variantLines = [];
+      products.forEach((p) => {
+        (p.variants || []).forEach((v) => {
+          variantLines.push({
+            product: p.title || 'Product',
+            sku: v.sku || 'N/A',
+            id: v.id || 'N/A',
+            price: v.price || 'N/A',
+            currency: v.currency || ''
+          });
+        });
+      });
+
+      const reply =
+        products.length === 0
+          ? resultText || 'No products matched that search.'
+          : variantLines.length
+            ? (() => {
+                const maxLines = 20;
+                const header =
+                  variantLines.length > maxLines
+                    ? `Found ${variantLines.length} variants (showing first ${maxLines}):`
+                    : `Found ${variantLines.length} variants:`;
+                const lines = variantLines.slice(0, maxLines).map((v) => {
+                  const price = v.currency ? `${v.price} ${v.currency}` : v.price;
+                  return `• ${v.product}\n  SKU: ${v.sku}\n  Variant ID: ${v.id}\n  Price: ${price}\n`;
+                });
+                return [header, ...lines].join('\n\n');
+              })()
+            : `Found ${products.length} products, but no variants surfaced.`;
+
+      setChatMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+    } catch (error) {
+      setProductError(error.message || 'Product search failed');
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: `Product search failed: ${error?.message || 'Unknown error'}` }
+      ]);
+    } finally {
+      setProductLoading(false);
+    }
+  };
+
+  const handleSendMessage = async (text) => {
+    if (!text || !text.trim()) return;
+    const trimmed = text.trim();
+    setShowScheduleModal(true);
+
+    // Handle pending confirmation flow
+    const confirmRegex = /^(confirm|yes|submit|looks good|approve)/i;
+    if (pendingDraft && confirmRegex.test(trimmed)) {
+      setChatMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
+      await handleCreateOrder(pendingDraft);
+      return;
+    }
+
+    setChatMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
+    setSchedulerProcessing(true);
+    try {
+      const assistantMessages = [];
+      let summaryParts = [];
+      const draft = {
+        line_items:
+          createSku || createVariantId
+            ? [
+                {
+                  sku: createSku || undefined,
+                  variant_id: createVariantId ? Number(createVariantId) : undefined,
+                  quantity: createQuantity
+                }
+              ]
+            : [],
+        note: schedulerQuery || ''
+      };
+      const result = await window.electronAPI.codexOrderComposer(trimmed, draft);
+      if (!result?.ok) {
+        console.error('[order-chat] codexOrderComposer error result:', result);
+        throw new Error(result?.error || 'Codex order composer failed');
+      }
+      const raw = result.data || {};
+      const data =
+        typeof raw === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(raw);
+              } catch {
+                return { reply: raw };
+              }
+            })()
+          : raw;
+      console.log('[order-chat] codex composer data:', data);
+      let combinedReply = data.reply ? String(data.reply) : '';
+      setShowScheduleModal(true);
+      if (data.action === 'search') {
+        await handleProductSearch(data.search_query);
+      }
+      if (data.action === 'update_draft') {
+        // Keep draft updates to reply only; state still updates SKU/qty
+        if (data.line_items && data.line_items.length) {
+          const first = data.line_items[0];
+          if (first.sku) {
+            setCreateSku(first.sku);
+          }
+          if (first.variant_id) {
+            setCreateVariantId(String(first.variant_id));
+          }
+          if (first.quantity) setCreateQuantity(first.quantity);
+        }
+      }
+      if (!combinedReply) {
+        combinedReply = JSON.stringify(data, null, 2);
+      }
+      console.log('[order-chat] combinedReply:', combinedReply);
+      assistantMessages.push({ role: 'assistant', text: combinedReply });
+      if (data.action === 'submit' && data.confirm_submit) {
+        const summaryLine =
+          (createSku || createVariantId) && createQuantity
+            ? `About to submit: SKU ${createSku || 'N/A'} / Variant ${createVariantId || 'N/A'} x ${createQuantity}. Please confirm to submit.`
+            : 'Draft is ready. Please confirm to submit.';
+        setPendingDraft({
+          line_items:
+            createSku || createVariantId
+              ? [
+                  {
+                    sku: createSku ? createSku.trim() : undefined,
+                    variant_id: createVariantId ? Number(createVariantId) : undefined,
+                    quantity: Math.max(1, Number(createQuantity) || 1)
+                  }
+                ]
+              : draft.line_items,
+          note: schedulerQuery.trim() || undefined
+        });
+        assistantMessages.push({ role: 'assistant', text: summaryLine });
+        setSchedulerProcessing(false);
+        setChatInput('');
+        setShowScheduleModal(true);
+        if (assistantMessages.length) {
+          setChatMessages((prev) => {
+            const next = [...prev, ...assistantMessages];
+            console.log('[order-chat] assistantMessages to append (submit):', assistantMessages);
+            console.log('[order-chat] appended messages after submit prompt:', next.map((m) => m.text));
+            return next;
+          });
+        }
+        return;
+      }
+      // Heuristic: if user clearly asked about products and no search was run, run a broad search
+      const needsProductList =
+        !data.action || data.action === 'none' || data.action === 'update_draft';
+      if (needsProductList && /\bproduct/i.test(trimmed)) {
+        await handleProductSearch('');
+      }
+      if (assistantMessages.length) {
+        setChatMessages((prev) => {
+          const next = [...prev, ...assistantMessages];
+          console.log('[order-chat] assistantMessages to append:', assistantMessages);
+          console.log('[order-chat] appended messages:', next.map((m) => m.text));
+          return next;
+        });
+      }
+    } catch (error) {
+      setOrdersError(error.message || 'Codex order composer failed');
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: `Sorry, I hit an error: ${error?.message || 'Unknown error'}` }
+      ]);
+    } finally {
+      setSchedulerProcessing(false);
+      setChatInput('');
+      setShowScheduleModal(true);
+    }
   };
 
   const handleSaveQuery = () => {
@@ -897,7 +1255,18 @@ function App() {
           Main,
           null,
           showScheduleModal
-            ? h(ScheduleModal, { query: schedulerQuery, onClose: () => setShowScheduleModal(false) })
+            ? h(ScheduleModal, {
+                onClose: () => {
+                  setShowScheduleModal(false);
+                  setSchedulerProcessing(false);
+                },
+                orderText: chatInput,
+                submitting: schedulerProcessing,
+                messages: chatMessages,
+                onSendMessage: handleSendMessage,
+                onInputChange: setChatInput,
+                messagesEndRef
+              })
             : null,
           h(
             Panel,

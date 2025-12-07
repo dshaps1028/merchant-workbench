@@ -128,6 +128,70 @@ const codexOrders = async (prompt) => {
   }
 };
 
+const codexOrderComposer = async (prompt, draft) => {
+  if (codexInitError) {
+    return { ok: false, error: codexInitError };
+  }
+
+  try {
+    const thread = await getCodexThread();
+    const schema = {
+      type: 'object',
+      properties: {
+        reply: { type: 'string' },
+        action: {
+          type: 'string',
+          enum: ['none', 'search', 'update_draft', 'submit']
+        },
+        search_query: { type: 'string', nullable: true },
+        line_items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              sku: { type: 'string', nullable: true },
+              variant_id: { type: 'integer', nullable: true },
+              quantity: { type: 'integer', nullable: true },
+              title: { type: 'string', nullable: true }
+            },
+            required: ['sku', 'variant_id', 'quantity', 'title'],
+            additionalProperties: false
+          },
+          nullable: true
+        },
+        email: { type: 'string', nullable: true },
+        note: { type: 'string', nullable: true },
+        confirm_submit: { type: 'boolean', nullable: true }
+      },
+      required: ['reply', 'action', 'search_query', 'line_items', 'email', 'note', 'confirm_submit'],
+      additionalProperties: false
+    };
+
+    const turn = await thread.run(
+      [
+        {
+          type: 'text',
+          text:
+            'You are an order creation assistant. Maintain a draft order from conversation. ' +
+            'Use action=search when you need product info (provide search_query). ' +
+            'Use action=update_draft with line_items/email/note when updating the draft. ' +
+            'If required details are missing (SKU or variant, quantity, customer email, shipping/billing info), ask for them explicitly before attempting to submit and wait for the answer. ' +
+            'Before submitting, summarize the draft (items, qty, SKU/variant) and ask the user to confirm. ' +
+            'Use action=submit only after the user has clearly confirmed creation; set confirm_submit=true in that case. ' +
+            'Respond with a helpful reply in reply. Always include every field in the schema; when a field is not applicable, set it to null (or [] for line_items).'
+        },
+        { type: 'text', text: `Current draft JSON: ${JSON.stringify(draft || {})}` },
+        { type: 'text', text: `User: ${prompt}` }
+      ],
+      { outputSchema: schema }
+    );
+
+    return { ok: true, data: turn.finalResponse };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Codex order composer failed' };
+  }
+};
+
 const getMcpClient = async () => {
   if (!mcpClientPromise) {
     mcpClientPromise = (async () => {
@@ -247,10 +311,89 @@ const mcpListOrders = async (params) => {
   }
 };
 
+const mcpCreateOrder = async (params) => {
+  try {
+    const { client } = await getMcpClient();
+    const result = await client.callTool({
+      name: 'create_order',
+      arguments: params
+    });
+
+    const order =
+      (result.structuredContent && result.structuredContent.order) ||
+      (result.content || [])
+        .flatMap((item) => item.json?.order || item.text?.order || [])
+        .find(Boolean);
+
+    return {
+      ok: true,
+      order: order || null,
+      text: (result.content && result.content.map((c) => c.text).filter(Boolean).join('\n')) || ''
+    };
+  } catch (error) {
+    console.error('[preload] MCP create_order failed:', error);
+    return { ok: false, error: error?.message || 'MCP create_order failed' };
+  }
+};
+
+const mcpSearchProducts = async (params) => {
+  try {
+    const { client } = await getMcpClient();
+    const result = await client.callTool({
+      name: 'search_products',
+      arguments: params
+    });
+
+    const products =
+      (result.structuredContent && result.structuredContent.products) ||
+      (result.content || [])
+        .flatMap((item) => item.json?.products || item.text?.products || [])
+        .filter(Boolean);
+
+    return {
+      ok: true,
+      products: Array.isArray(products) ? products : [],
+      text: (result.content && result.content.map((c) => c.text).filter(Boolean).join('\n')) || ''
+    };
+  } catch (error) {
+    console.error('[preload] MCP search_products failed:', error);
+    return { ok: false, error: error?.message || 'MCP search_products failed' };
+  }
+};
+
+const mcpListProducts = async (params) => {
+  try {
+    const { client } = await getMcpClient();
+    const result = await client.callTool({
+      name: 'list_products',
+      arguments: params
+    });
+
+    const products =
+      (result.structuredContent && result.structuredContent.products) ||
+      (result.content || [])
+        .flatMap((item) => item.json?.products || item.text?.products || [])
+        .filter(Boolean);
+
+    return {
+      ok: true,
+      products: Array.isArray(products) ? products : [],
+      text: (result.content && result.content.map((c) => c.text).filter(Boolean).join('\n')) || ''
+    };
+  } catch (error) {
+    console.error('[preload] MCP list_products failed:', error);
+    return { ok: false, error: error?.message || 'MCP list_products failed' };
+  }
+};
+
 const api = {
   ping: () => 'ready',
   codexOrders,
-  mcpListOrders
+  codexOrderComposer,
+  mcpListOrders,
+  mcpCreateOrder,
+  mcpSearchProducts,
+  mcpListProducts
 };
 
 if (process.contextIsolated) {
