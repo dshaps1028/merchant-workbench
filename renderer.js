@@ -40,6 +40,190 @@ const Panel = ({ title, description, id, children }) =>
 const ActionButton = ({ onClick, children, ...rest }) =>
   h('button', { onClick, ...rest }, children);
 
+const Modal = ({ order, onClose }) =>
+  h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: '#0f2a1f',
+          color: '#e8f4ec',
+          borderRadius: '12px',
+          padding: '20px',
+          width: 'min(720px, 92vw)',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          boxShadow: '0 14px 32px rgba(0,0,0,0.35)',
+          position: 'relative'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#000',
+            borderRadius: '50%',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#e8f4ec',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }
+        },
+        '✕'
+      ),
+      h('h2', null, order.name || `Order #${order.id}`),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Status: ${order.financial_status || 'unknown'} / ${order.fulfillment_status || 'unfulfilled'}`
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Email: ${order.email || (order.customer && order.customer.email) || 'N/A'}`
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Total: ${order.total_price ? `$${order.total_price} ${order.currency || ''}` : '—'}`
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Date: ${
+          order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'
+        }`
+      ),
+      h(
+        'div',
+        { style: { marginTop: '12px' } },
+        h('strong', null, 'Line items:'),
+        h(
+          'ul',
+          { className: 'orders' },
+          (order.line_items || []).map((item, idx) =>
+            h(
+              'li',
+              { key: `${item.id || idx}-${item.sku || idx}`, className: 'order-row' },
+              h('p', { className: 'order-id' }, `${item.title || 'Item'} x${item.quantity || 1}`),
+              h(
+                'p',
+                { className: 'order-sub' },
+                `SKU: ${item.sku || 'N/A'} • Price: ${item.price ? `$${item.price}` : '—'}`
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+
+const ScheduleModal = ({ query, onClose }) =>
+  h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: '#0f2a1f',
+          color: '#e8f4ec',
+          borderRadius: '12px',
+          padding: '20px',
+          width: 'min(520px, 90vw)',
+          boxShadow: '0 14px 32px rgba(0,0,0,0.35)',
+          position: 'relative'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#000',
+            borderRadius: '50%',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#e8f4ec',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }
+        },
+        '✕'
+      ),
+      h('h2', null, 'Create Order'),
+      h(
+        'p',
+        { className: 'order-sub' },
+        query && query.trim()
+          ? `Requested: ${query.trim()}`
+          : 'Describe the order you want to create.'
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        'Order creation via AI is coming soon. Close this dialog to continue.'
+      ),
+      h(
+        'div',
+        { style: { marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' } },
+        h('label', { htmlFor: 'create-order-notes', className: 'order-sub' }, 'Notes'),
+        h('input', {
+          id: 'create-order-notes',
+          type: 'text',
+          placeholder: 'Add any notes for this order...',
+          style: {
+            padding: '10px 12px',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.06)',
+            color: '#e8f4ec'
+          }
+        })
+      )
+    )
+  );
+
 const LogList = ({ entries }) =>
   h(
     'ul',
@@ -62,7 +246,7 @@ const LogList = ({ entries }) =>
     )
   );
 
-const OrdersList = ({ orders, loading, error, queried }) => {
+const OrdersList = ({ orders, loading, error, queried, onSelect }) => {
   if (loading) {
     return h('p', { className: 'order-sub' }, 'Loading orders…');
   }
@@ -82,7 +266,12 @@ const OrdersList = ({ orders, loading, error, queried }) => {
     orders.map((order) =>
       h(
         'li',
-        { key: order.id, className: 'order-row' },
+        {
+          key: order.id,
+          className: 'order-row',
+          onClick: () => onSelect && onSelect(order),
+          style: { cursor: onSelect ? 'pointer' : undefined }
+        },
         h(
           'div',
           { className: 'order-meta' },
@@ -124,6 +313,8 @@ function App() {
   const [schedulerQuery, setSchedulerQuery] = useState('');
   const [schedulerProcessing, setSchedulerProcessing] = useState(false);
   const [lastQueryLabel, setLastQueryLabel] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   useEffect(() => {
     setStatus('Ready');
@@ -142,6 +333,7 @@ function App() {
     setOrdersLoading(true);
     setOrdersError('');
     setStatus('Fetching orders…');
+    setSelectedOrder(null);
 
     try {
       if (!window.electronAPI?.mcpListOrders) {
@@ -216,11 +408,9 @@ function App() {
   };
 
   const handleSchedule = async () => {
-    if (!schedulerQuery.trim()) {
-      return;
-    }
     setSchedulerProcessing(true);
     setStatus('Preparing schedule…');
+    setShowScheduleModal(true);
     // Placeholder for future MCP tool to create recurring exports
     setTimeout(() => {
       setStatus('Ready');
@@ -373,7 +563,25 @@ function App() {
     React.Fragment,
     null,
     h(PageTitle, {
-      title: 'Merchant Workbench',
+      title: [
+        'Shopif',
+        h(
+          'strong',
+          {
+            className: 'ai-accent',
+            style: {
+              color: 'rgba(149, 191, 72, 0.9)',
+              fontWeight: 700,
+              border: '2px solid rgba(149, 191, 72, 0.9)',
+              borderRadius: '6px',
+              padding: '2px 6px',
+              marginLeft: '6px',
+              display: 'inline-block'
+            }
+          },
+          'AI'
+        )
+      ],
       subtitle:
         'Manage your orders, analyze your order data and learn more about Shopify all in one place'
     }),
@@ -383,7 +591,7 @@ function App() {
       h(
         Shell,
         null,
-        h(Header, { status, label: 'Saved Queries' }),
+        h(Header, { status, label: 'My Automations' }),
         h(Main, null, logs.length ? h('div', { id: 'log-panel' }, h(LogList, { entries: logs })) : null)
       ),
       h(
@@ -393,11 +601,44 @@ function App() {
         h(
           Main,
           null,
+          showScheduleModal
+            ? h(ScheduleModal, { query: schedulerQuery, onClose: () => setShowScheduleModal(false) })
+            : null,
           h(
             Panel,
             {
-              title: 'Order Search',
-              description: 'search for your Shopify orders using natural language'
+              title: 'CREATE A NEW ORDER',
+              description: 'Chat with our order agent and create orders without touching the Shopify console'
+            },
+            h(
+              'div',
+              {
+                style: {
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'center',
+                  marginBottom: '12px',
+                  flexWrap: 'wrap'
+                }
+              },
+              h(
+                ActionButton,
+                {
+                  onClick: handleSchedule,
+                  disabled: schedulerProcessing
+                },
+                schedulerProcessing ? 'Working…' : 'Get Started'
+              )
+            )
+          ),
+          selectedOrder
+            ? h(Modal, { order: selectedOrder, onClose: () => setSelectedOrder(null) })
+            : null,
+          h(
+            Panel,
+            {
+              title: 'SEARCH FOR ORDERS',
+              description: 'Make edits, diagnose issues, and generate reports using plain english'
             },
             h(
               'div',
@@ -412,7 +653,7 @@ function App() {
               },
               h('input', {
                 type: 'text',
-                placeholder: 'Ask Codex: e.g., "show 3 pending orders from yesterday"',
+                placeholder: '"show 3 pending orders from yesterday"',
                 value: nlQuery,
                 onChange: (event) => setNlQuery(event.target.value),
                 style: { flex: '1 1 240px' }
@@ -440,41 +681,13 @@ function App() {
                 h(ActionButton, { onClick: handleSaveQuery }, 'Save Query & Results')
               )
             : null,
-          h(OrdersList, { orders, loading: ordersLoading, error: ordersError, queried: hasQueriedOrders }),
-          h(
-            Panel,
-            {
-              title: 'Scheduler',
-              description: 'Create a recurring export using natural language'
-            },
-            h(
-              'div',
-              {
-                style: {
-                  display: 'flex',
-                  gap: '10px',
-                  alignItems: 'center',
-                  marginBottom: '12px',
-                  flexWrap: 'wrap'
-                }
-              },
-              h('input', {
-                type: 'text',
-                placeholder: 'Describe the export schedule (e.g., \"daily CSV of unfulfilled orders\")',
-                value: schedulerQuery,
-                onChange: (event) => setSchedulerQuery(event.target.value),
-                style: { flex: '1 1 240px' }
-              }),
-              h(
-                ActionButton,
-                {
-                  onClick: handleSchedule,
-                  disabled: schedulerProcessing || !schedulerQuery.trim()
-                },
-                schedulerProcessing ? 'Working…' : 'Create schedule'
-              )
-            )
-          )
+          h(OrdersList, {
+            orders,
+            loading: ordersLoading,
+            error: ordersError,
+            queried: hasQueriedOrders,
+            onSelect: setSelectedOrder
+          })
         )
       )
     )
