@@ -40,7 +40,7 @@ const Panel = ({ title, description, id, children }) =>
 const ActionButton = ({ onClick, children, ...rest }) =>
   h('button', { onClick, ...rest }, children);
 
-const Modal = ({ order, onClose }) => {
+const Modal = ({ order, onClose, onEdit }) => {
   if (!order) return null;
   const safeOrder = {
     name: order.name || order.id || 'Order',
@@ -59,7 +59,8 @@ const Modal = ({ order, onClose }) => {
       style: {
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.6)',
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -72,14 +73,15 @@ const Modal = ({ order, onClose }) => {
       'div',
       {
         style: {
-          background: '#0f2a1f',
+          background: 'rgba(255,255,255,0.12)',
           color: '#e8f4ec',
           borderRadius: '6px',
           padding: '20px',
-          width: 'min(720px, 92vw)',
+          width: 'min(780px, 90vw)',
           maxHeight: '85vh',
           overflowY: 'auto',
-          boxShadow: '0 14px 32px rgba(0,0,0,0.35)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
           position: 'relative'
         },
         onClick: (e) => e.stopPropagation()
@@ -104,6 +106,34 @@ const Modal = ({ order, onClose }) => {
           }
         },
         '✕'
+      ),
+      h(
+        'div',
+        {
+          style: {
+            position: 'absolute',
+            top: '10px',
+            left: '10px',
+            display: 'flex',
+            gap: '8px'
+          }
+        },
+        h(
+          'button',
+          {
+            onClick: onEdit,
+            style: {
+              padding: '6px 10px',
+              borderRadius: '6px',
+              background: 'rgba(149,191,72,0.2)',
+              color: '#0f1b14',
+              border: '1px solid rgba(149,191,72,0.6)',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }
+          },
+          'Edit Order'
+        )
       ),
       h('h2', null, order.name || `Order #${order.id}`),
       h(
@@ -186,7 +216,7 @@ const ScheduleModal = ({
           color: '#e8f4ec',
           borderRadius: '6px',
           padding: '20px',
-          width: 'min(1040px, 90vw)',
+          width: 'min(780px, 90vw)',
           border: '1px solid rgba(255,255,255,0.2)',
           boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
           position: 'relative'
@@ -343,7 +373,7 @@ const EditOrdersModal = ({
           color: '#e8f4ec',
           borderRadius: '6px',
           padding: '20px',
-          width: 'min(1040px, 90vw)',
+          width: 'min(780px, 90vw)',
           border: '1px solid rgba(255,255,255,0.2)',
           boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
           position: 'relative'
@@ -673,6 +703,7 @@ function App() {
   ]);
   const [editInput, setEditInput] = useState('');
   const [editProcessing, setEditProcessing] = useState(false);
+  const [editTargets, setEditTargets] = useState([]);
   const messagesEndRef = useRef(null);
   const editMessagesEndRef = useRef(null);
 
@@ -726,11 +757,13 @@ function App() {
       return;
     }
 
-    // Apply tag updates if parsed and orders available.
-    if (parsedTags.length && orders.length) {
+    const targetOrders = editTargets.length ? editTargets : orders;
+
+    // Apply tag updates if parsed and target orders available.
+    if (parsedTags.length && targetOrders.length) {
       const tagString = parsedTags.join(', ');
       try {
-        for (const order of orders) {
+        for (const order of targetOrders) {
           await window.electronAPI.mcpUpdateOrder({
             order_id: order.id,
             tags: tagString
@@ -740,7 +773,7 @@ function App() {
           ...prev,
           {
             role: 'assistant',
-            text: `Tags "${tagString}" applied to ${orders.length} order${orders.length === 1 ? '' : 's'}.`
+            text: `Tags "${tagString}" applied to ${targetOrders.length} order${targetOrders.length === 1 ? '' : 's'}.`
           }
         ]);
       } catch (error) {
@@ -1653,12 +1686,22 @@ function App() {
               )
             : null,
           selectedOrder
-            ? h(Modal, { order: selectedOrder, onClose: () => setSelectedOrder(null) })
+            ? h(Modal, {
+                order: selectedOrder,
+                onClose: () => setSelectedOrder(null),
+                onEdit: () => {
+                  setEditTargets([selectedOrder]);
+                  setShowEditModal(true);
+                }
+              })
             : null,
           h(EditOrdersModal, {
             open: showEditModal,
-            onClose: () => setShowEditModal(false),
-            orderCount: orders.length,
+            onClose: () => {
+              setShowEditModal(false);
+              setEditTargets([]);
+            },
+            orderCount: (editTargets.length || orders.length),
             messages: editMessages,
             onSendMessage: handleEditSendMessage,
             onInputChange: setEditInput,
@@ -1712,7 +1755,12 @@ function App() {
                 },
                 h(
                   ActionButton,
-                  { onClick: () => setShowEditModal(true) },
+                  {
+                    onClick: () => {
+                      setEditTargets(orders);
+                      setShowEditModal(true);
+                    }
+                  },
                   orders.length === 1 ? 'Edit Order' : 'Edit Orders'
                 )
               )
