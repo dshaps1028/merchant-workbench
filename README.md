@@ -94,6 +94,7 @@ Unit tests are powered by Jest and live under `tests/`. Current coverage:
 - Utils: date range parsing (explicit dates, months, relative ranges, fuzzy typos like “yesterdy”), tag parsing, and normalization helpers.
 - Automations DB (sql.js): persistence of automations, JSON snapshots, and scheduling fields (`last_run`, `next_run`).
 - Auth helpers: keytar-backed credential storage and active shop tracking.
+- MCP handlers: order create/update payload shaping and responses, using mocked Shopify calls.
 
 Run the suite:
 ```bash
