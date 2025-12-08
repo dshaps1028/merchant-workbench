@@ -845,6 +845,56 @@ const OrdersList = ({ orders, loading, error, queried, onSelect }) => {
   );
 };
 
+const CreatedOrdersCarousel = ({ orders, onSelect }) => {
+  if (!orders || !orders.length) return null;
+  return h(
+    'div',
+    {
+      style: {
+        display: 'flex',
+        gap: '12px',
+        width: '100%',
+        overflowX: 'auto',
+        padding: '4px 0'
+      }
+    },
+    orders.map((order, idx) =>
+      h(
+        'div',
+        {
+          key: order.id || idx,
+          className: 'order-row',
+          style: {
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '6px',
+            padding: '12px',
+            background: 'rgba(255,255,255,0.06)',
+            cursor: onSelect ? 'pointer' : 'default',
+            minWidth: '260px',
+            flex: '0 0 auto'
+          },
+          onClick: () => onSelect && onSelect(order)
+        },
+        h(
+          'div',
+          { className: 'order-meta' },
+          h('p', { className: 'order-id' }, order.name || `Order #${order.id}`),
+          h(
+            'p',
+            { className: 'order-sub' },
+            `Total: ${order.total_price ? `$${order.total_price}` : '—'}`
+          ),
+          h(
+            'p',
+            { className: 'order-sub' },
+            `Date: ${order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'}`
+          )
+        )
+      )
+    )
+  );
+};
+
 const startOfDay = (date) =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
 
@@ -2439,13 +2489,7 @@ function App() {
             ? h(
                 Panel,
                 { title: 'RECENTLY CREATED ORDERS', description: 'Orders you just created' },
-                h(OrdersList, {
-                  orders: createdOrders,
-                  loading: false,
-                  error: '',
-                  queried: true,
-                  onSelect: setSelectedOrder
-                })
+                h(CreatedOrdersCarousel, { orders: createdOrders, onSelect: setSelectedOrder })
               )
             : null,
       selectedOrder
