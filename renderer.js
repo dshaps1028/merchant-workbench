@@ -345,7 +345,9 @@ const EditOrdersModal = ({
   onInputChange,
   inputValue,
   submitting,
-  messagesEndRef
+  messagesEndRef,
+  showAutomationButton,
+  onCreateAutomation
 }) => {
   if (!open) return null;
   const title = orderCount === 1 ? 'Edit Order' : 'Edit Orders';
@@ -401,7 +403,29 @@ const EditOrdersModal = ({
         },
         '✕'
       ),
-      h('h2', null, title),
+      h(
+        'div',
+        { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' } },
+        h('h2', { style: { margin: 0 } }, title),
+        showAutomationButton
+          ? h(
+              'button',
+              {
+                onClick: onCreateAutomation,
+                style: {
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  background: 'rgba(149,191,72,0.2)',
+                  color: '#0f1b14',
+                  border: '1px solid rgba(149,191,72,0.6)',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }
+              },
+              'Create Automation'
+            )
+          : null
+      ),
       h(
         'p',
         { className: 'order-sub', style: { marginTop: 0 } },
@@ -500,14 +524,174 @@ const EditOrdersModal = ({
   );
 };
 
-const LogList = ({ entries }) =>
+const AutomationModal = ({
+  open,
+  onClose,
+  messages,
+  onSendMessage,
+  onInputChange,
+  inputValue,
+  submitting,
+  messagesEndRef
+}) => {
+  if (!open) return null;
+  return h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(6px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: 'rgba(255,255,255,0.12)',
+          color: '#e8f4ec',
+          borderRadius: '6px',
+          padding: '20px',
+          width: 'min(780px, 90vw)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
+          position: 'relative'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#000',
+            borderRadius: '6px',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#e8f4ec',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }
+        },
+        '✕'
+      ),
+      h('h2', null, 'Create Automation'),
+      h(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            maxHeight: '60vh',
+            overflowY: 'auto',
+            paddingRight: '4px'
+          }
+        },
+        h(
+          'div',
+          {
+            style: {
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '6px',
+              padding: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }
+          },
+          messages.map((m, idx) =>
+            h(
+              'div',
+              {
+                key: idx,
+                style: {
+                  alignSelf: m.role === 'assistant' ? 'flex-start' : 'flex-end',
+                  background: m.role === 'assistant' ? '#f1f4f2' : 'rgba(149,191,72,0.2)',
+                  padding: '8px 10px',
+                  borderRadius: '6px'
+                }
+              },
+              h(
+                'p',
+                { className: 'order-sub', style: { margin: 0, whiteSpace: 'pre-wrap', color: '#0f1b14' } },
+                m.text
+              )
+            )
+          )
+        ),
+        h('div', { ref: messagesEndRef })
+      ),
+      h(
+        'div',
+        { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+        h('input', {
+          type: 'text',
+          value: inputValue,
+          onChange: (e) => onInputChange(e.target.value),
+          placeholder: 'Describe the automation (criteria + actions)…',
+          style: {
+            flex: '1 1 auto',
+            padding: '10px 12px',
+            borderRadius: '6px',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.06)',
+            color: '#e8f4ec'
+          },
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') {
+              onSendMessage(inputValue);
+            }
+          },
+          disabled: submitting
+        }),
+        h(
+          'button',
+          {
+            onClick: () => onSendMessage(inputValue),
+            disabled: submitting || !inputValue.trim(),
+            style: {
+              padding: '10px 14px',
+              borderRadius: '6px',
+              background: submitting ? 'rgba(255,255,255,0.3)' : '#000',
+              color: '#fff',
+              fontWeight: 700,
+              letterSpacing: '0.3px',
+              cursor: submitting || !inputValue.trim() ? 'not-allowed' : 'pointer'
+            }
+          },
+          submitting ? 'Working…' : 'Send'
+        )
+      )
+    )
+  );
+};
+
+const LogList = ({ entries, onSelect }) =>
   h(
     'ul',
     { className: 'logs' },
     entries.map((entry, idx) =>
       h(
         'li',
-        { key: idx, className: 'log-entry' },
+        {
+          key: idx,
+          className: 'log-entry',
+          onClick: () => onSelect && onSelect(entry),
+          style: onSelect ? { cursor: 'pointer' } : undefined
+        },
         h(
           'div',
           { style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
@@ -583,15 +767,196 @@ const startOfDay = (date) =>
 const endOfDay = (date) =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 
+const AutomationModalDetail = ({ entry, onClose }) => {
+  if (!entry) return null;
+  const lines = entry.details ? entry.details.split('\n') : [];
+  const scheduleLine = lines.find((l) => l.toLowerCase().startsWith('schedule:')) || '';
+  const actionLine = lines.find((l) => l.toLowerCase().startsWith('action:')) || '';
+  const orders = Array.isArray(entry.ordersSnapshot) ? entry.ordersSnapshot : [];
+  return h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(6px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: 'rgba(255,255,255,0.12)',
+          color: '#e8f4ec',
+          borderRadius: '6px',
+          padding: '20px',
+          width: 'min(780px, 90vw)',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
+          position: 'relative'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#000',
+            borderRadius: '6px',
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#e8f4ec',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }
+        },
+        '✕'
+      ),
+      scheduleLine ? h('h2', null, scheduleLine) : null,
+      actionLine ? h('h2', null, actionLine) : null,
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Last run: ${entry.time.toLocaleString()} • ${entry.count} record${entry.count === 1 ? '' : 's'}`
+      ),
+      !scheduleLine && !actionLine && entry.details
+        ? h('p', { className: 'order-sub', style: { whiteSpace: 'pre-wrap' } }, entry.details)
+        : null,
+      orders.length
+        ? h(
+            'div',
+            { style: { marginTop: '12px' } },
+            h('h3', null, 'Orders updated in last run'),
+            h(
+              'ul',
+              { className: 'orders' },
+              orders.map((order, idx) =>
+                h(
+                  'li',
+                  {
+                    key: order.id || idx,
+                    className: 'order-row'
+                  },
+                  h(
+                    'div',
+                    { className: 'order-meta' },
+                    h('p', { className: 'order-id' }, order.name || `Order #${order.id}`),
+                    h(
+                      'p',
+                      { className: 'order-sub' },
+                      `Email: ${
+                        order.email ||
+                        (order.customer && order.customer.email) ||
+                        'N/A'
+                      } • ${order.financial_status || 'status unknown'}`
+                    )
+                  ),
+                  h(
+                    'p',
+                    { className: 'order-sub' },
+                    `Total: ${order.total_price ? `$${order.total_price}` : '—'}`
+                  ),
+                  h(
+                    'p',
+                    { className: 'order-sub' },
+                    `Date: ${
+                      order.created_at
+                        ? new Date(order.created_at).toLocaleString()
+                        : 'N/A'
+                    }`
+                  )
+                )
+              )
+            )
+          )
+        : null
+    )
+  );
+};
+
+const levenshtein = (a, b) => {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[m][n];
+};
+
+const fuzzyNormalizeQuery = (text) => {
+  const vocab = [
+    'yesterday',
+    'today',
+    'tomorrow',
+    'last',
+    'past',
+    'week',
+    'month',
+    'year',
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday'
+  ];
+  const parts = text.toLowerCase().split(/\b/);
+  let warning = '';
+  const normalized = parts
+    .map((tok) => {
+      if (!/[a-z]/.test(tok)) return tok;
+      let best = tok;
+      let bestDist = Infinity;
+      for (const cand of vocab) {
+        const d = levenshtein(tok, cand);
+        if (d < bestDist) {
+          bestDist = d;
+          best = cand;
+        }
+      }
+      if (bestDist > 0 && bestDist <= 2 && best !== tok) {
+        warning = warning || `Interpreted "${tok}" as "${best}".`;
+        return best;
+      }
+      return tok;
+    })
+    .join('');
+  return { normalized, warning };
+};
+
 const deriveDateRangeFromQuery = (query, existingMin, existingMax) => {
   let created_at_min = existingMin;
   let created_at_max = existingMax;
 
   if (created_at_min || created_at_max) {
-    return { created_at_min, created_at_max };
+    return { created_at_min, created_at_max, warning: '' };
   }
 
-  const lcQuery = query.toLowerCase();
+  const { normalized: lcQuery, warning } = fuzzyNormalizeQuery(query);
   const dayMs = 24 * 60 * 60 * 1000;
   let rangeStart = null;
   let rangeEnd = null;
@@ -680,7 +1045,8 @@ const deriveDateRangeFromQuery = (query, existingMin, existingMax) => {
 
   return {
     created_at_min: rangeStart ? rangeStart.toISOString() : created_at_min,
-    created_at_max: rangeEnd ? rangeEnd.toISOString() : created_at_max
+    created_at_max: rangeEnd ? rangeEnd.toISOString() : created_at_max,
+    warning
   };
 };
 
@@ -721,8 +1087,22 @@ function App() {
   const [editInput, setEditInput] = useState('');
   const [editProcessing, setEditProcessing] = useState(false);
   const [editTargets, setEditTargets] = useState([]);
+  const [editCommitted, setEditCommitted] = useState(false);
+  const [lastEditDescription, setLastEditDescription] = useState('');
+  const [showAutomationModal, setShowAutomationModal] = useState(false);
+  const [automationMessages, setAutomationMessages] = useState([
+    {
+      role: 'assistant',
+      text:
+        'Tell me how often you want to run this recurring automation. ShopifAI will combine your search query with the edit operation you just performed and run it on the schedule you define here.'
+    }
+  ]);
+  const [automationInput, setAutomationInput] = useState('');
+  const [automationProcessing, setAutomationProcessing] = useState(false);
+  const [selectedAutomation, setSelectedAutomation] = useState(null);
   const messagesEndRef = useRef(null);
   const editMessagesEndRef = useRef(null);
+  const automationMessagesEndRef = useRef(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -737,13 +1117,25 @@ function App() {
   }, [editMessages, showEditModal]);
 
   useEffect(() => {
+    if (automationMessagesEndRef.current) {
+      automationMessagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [automationMessages, showAutomationModal]);
+
+  useEffect(() => {
     setStatus('Ready');
   }, []);
 
-  const addLog = ({ count, label }) => {
+  const addLog = ({ count, label, details, ordersSnapshot }) => {
     setLogs((prev) => [
       ...prev,
-      { time: new Date(), count, label: label || 'Saved query' }
+      {
+        time: new Date(),
+        count,
+        label: label || 'Saved query',
+        details,
+        ordersSnapshot: ordersSnapshot || []
+      }
     ]);
   };
 
@@ -793,6 +1185,8 @@ function App() {
             text: `Tags "${tagString}" applied to ${targetOrders.length} order${targetOrders.length === 1 ? '' : 's'}.`
           }
         ]);
+        setEditCommitted(true);
+        setLastEditDescription(`Add tags: ${tagString}`);
       } catch (error) {
         setEditMessages((prev) => [
           ...prev,
@@ -814,6 +1208,43 @@ function App() {
     setEditMessages((prev) => [...prev, { role: 'assistant', text: assistantText }]);
     setEditProcessing(false);
     setEditInput('');
+  };
+
+  const handleAutomationSendMessage = (text) => {
+    if (!text || !text.trim()) return;
+    const trimmed = text.trim();
+    setAutomationMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
+    setAutomationProcessing(true);
+    const lower = trimmed.toLowerCase();
+    const schedule =
+      lower.includes('daily') || lower.includes('every day')
+        ? 'Daily'
+        : lower.includes('weekly') || lower.includes('every week')
+          ? 'Weekly'
+          : lower.includes('monthly') || lower.includes('every month')
+            ? 'Monthly'
+            : lower.includes('year') || lower.includes('annual')
+              ? 'Yearly'
+              : `Custom schedule: ${trimmed}`;
+    const searchLabel = lastQueryLabel || 'Last search';
+    const editLabel = lastEditDescription || 'Edit action';
+    const summary = `Automation saved: ${schedule} • ${searchLabel} • ${editLabel}`;
+    const detailText = `Schedule: ${schedule}\nSearch: ${searchLabel}\nAction: ${editLabel}`;
+    setAutomationMessages((prev) => [
+      ...prev,
+      {
+        role: 'assistant',
+        text: `${summary}\n\n(Automations UI placeholder; stored in My Automations.)`
+      }
+    ]);
+    addLog({
+      count: editTargets.length || orders.length || 0,
+      label: summary,
+      details: detailText,
+      ordersSnapshot: editTargets.length ? editTargets : orders
+    });
+    setAutomationProcessing(false);
+    setAutomationInput('');
   };
 
   const sanitizeAddress = (addr) => {
@@ -1639,7 +2070,19 @@ function App() {
         Shell,
         null,
         h(Header, { status, label: 'My Automations' }),
-        h(Main, null, logs.length ? h('div', { id: 'log-panel' }, h(LogList, { entries: logs })) : null)
+        h(
+          Main,
+          null,
+          logs.length
+            ? h('div', { id: 'log-panel' }, h(LogList, { entries: logs, onSelect: setSelectedAutomation }))
+            : null,
+          selectedAutomation
+            ? h(AutomationModalDetail, {
+                entry: selectedAutomation,
+                onClose: () => setSelectedAutomation(null)
+              })
+            : null
+        )
       ),
       h(
         Shell,
@@ -1702,30 +2145,57 @@ function App() {
                 })
               )
             : null,
-          selectedOrder
-            ? h(Modal, {
-                order: selectedOrder,
-                onClose: () => setSelectedOrder(null),
-                onEdit: () => {
-                  setEditTargets([selectedOrder]);
-                  setShowEditModal(true);
-                }
-              })
-            : null,
-          h(EditOrdersModal, {
-            open: showEditModal,
-            onClose: () => {
-              setShowEditModal(false);
-              setEditTargets([]);
-            },
-            orderCount: (editTargets.length || orders.length),
-            messages: editMessages,
-            onSendMessage: handleEditSendMessage,
-            onInputChange: setEditInput,
-            inputValue: editInput,
-            submitting: editProcessing,
-            messagesEndRef: editMessagesEndRef
-          }),
+      selectedOrder
+        ? h(Modal, {
+            order: selectedOrder,
+            onClose: () => setSelectedOrder(null),
+            onEdit: () => {
+              setEditTargets([selectedOrder]);
+              setShowEditModal(true);
+            }
+          })
+        : null,
+      h(EditOrdersModal, {
+        open: showEditModal,
+        onClose: () => {
+          setShowEditModal(false);
+          setEditTargets([]);
+          setEditCommitted(false);
+        },
+        orderCount: (editTargets.length || orders.length),
+        messages: editMessages,
+        onSendMessage: handleEditSendMessage,
+        onInputChange: setEditInput,
+        inputValue: editInput,
+        submitting: editProcessing,
+        messagesEndRef: editMessagesEndRef,
+        showAutomationButton: editCommitted,
+        onCreateAutomation: () => {
+          setAutomationMessages([
+            {
+              role: 'assistant',
+              text:
+                'Tell me how often you want to run this recurring automation. ShopifAI will combine your search query with the edit operation you just performed and run it on the schedule you define here.'
+            }
+          ]);
+          setAutomationInput('');
+          setShowAutomationModal(true);
+          setEditCommitted(false);
+        }
+      }),
+      h(AutomationModal, {
+        open: showAutomationModal,
+        onClose: () => {
+          setShowAutomationModal(false);
+          setAutomationInput('');
+        },
+        messages: automationMessages,
+        onSendMessage: handleAutomationSendMessage,
+        onInputChange: setAutomationInput,
+        inputValue: automationInput,
+        submitting: automationProcessing,
+        messagesEndRef: automationMessagesEndRef
+      }),
           h(
             Panel,
             {

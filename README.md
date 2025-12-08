@@ -64,6 +64,9 @@ The included MCP server (launched from `mcp-server/index.js`) uses the Model Con
 
 The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http`.
 
+## Search date parsing & typo tolerance
+The order search bar accepts natural language date phrases: explicit dates (`2025-09-12`), month ranges (`September 2025`), relative ranges (`yesterday`, `last week`, `past month`, `last year`), and weekdays (`last Sunday`). A lightweight fuzzy pass (Levenshtein distance ≤ 2 against known date terms) normalizes minor misspellings (e.g., “yesterdy” → “yesterday”). When a fuzzy correction is applied, a warning string is returned alongside the derived date range so the UI can surface it if desired. This helps avoid overly broad results when users mistype date phrases.
+
 ## Project structure
 - `main.js`: Electron main process that creates the browser window.
 - `preload.js`: Preload script for the renderer.
