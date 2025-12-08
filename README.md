@@ -34,25 +34,13 @@ You can run the Electron shell and MCP server separately or together. Run these 
   ```bash
   npm run dev
   ```
-- Start only the Electron app (uses the MCP HTTP bridge if already running):
+- Start only the Electron app (connects to the MCP server over stdio):
   ```bash
   npm start
   ```
 - Start only the MCP server (stdio):
   ```bash
   npm run start:mcp
-  ```
-- Start the MCP server with the HTTP bridge (leave this running in its own terminal when you want HTTP access):
-  ```bash
-  npm run start:mcp:http
-  ```
-- Start the MCP server (HTTP bridge) and Electron shell together for local development (two terminals):
-  ```bash
-  # Terminal 1: start the MCP server over HTTP
-  npm run start:mcp:http
-
-  # Terminal 2: launch the Electron shell
-  npm start
   ```
 
 If you run the MCP server manually, ensure it is listening on the `PORT` you configured in `.env` before launching the Electron app.
@@ -63,7 +51,6 @@ The included MCP server (launched from `mcp-server/index.js`) is a local clone o
 ### Local Enhancements
 - Added a `create_orders` tool to generate Shopify orders directly from Claude, complementing the existing order management commands.
 - Expanded `list_orders` filtering to support status, fulfillment state, created-at bounds, email, order ID, order number/name, and customer name.
-- Preserved the HTTP bridge (`npm run start:mcp:http`) so the renderer can talk to the MCP server over HTTP during development, while stdio remains the default for Electron.
 
 ### Core Tools
 The server exposes a Shopify-focused tool set through the Model Context Protocol, including:
@@ -71,7 +58,7 @@ The server exposes a Shopify-focused tool set through the Model Context Protocol
 - `list_orders`: returns Shopify order data with the filters listed above.
 - `create_order`: creates a single order with line items and customer details.
 
-The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http`.
+The Electron app connects to this MCP server over stdio by default.
 
 ## Authentication (private app tokens)
 This build uses Shopify private app tokens (no OAuth redirect) because private apps don’t support redirect URLs. To connect:
