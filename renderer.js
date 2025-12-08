@@ -1660,7 +1660,11 @@ function App() {
       return;
     }
     const queryValue = overrideQuery !== undefined ? overrideQuery : productQuery;
-    const cleanedQuery = (queryValue || '').trim();
+    const broadQuery = /^(all products?|all items?|products?)$/i;
+    let cleanedQuery = (queryValue || '').trim();
+    if (broadQuery.test(cleanedQuery)) {
+      cleanedQuery = '';
+    }
     setProductError('');
     setProductQuery(cleanedQuery);
     setProductLoading(true);
@@ -1695,10 +1699,27 @@ function App() {
           text: resultText
         });
 
-        if ((!cleanedQuery || products.length === 0) && window.electronAPI?.mcpListProducts) {
+        if (window.electronAPI?.mcpListProducts && (products.length === 0 || !cleanedQuery)) {
           const listResult = await window.electronAPI.mcpListProducts({ limit: 50 });
           if (listResult?.ok && Array.isArray(listResult.products)) {
             products = listResult.products;
+            if (cleanedQuery) {
+              const terms = cleanedQuery
+                .toLowerCase()
+                .split(/\s+/)
+                .filter((t) => t.length >= 3);
+              products = products.filter((p) => {
+                const title = (p.title || p.handle || '').toLowerCase();
+                const productType = (p.product_type || '').toLowerCase();
+                const variantTitles = (p.variants || []).map((v) => (v.title || '').toLowerCase());
+                return terms.some(
+                  (t) =>
+                    title.includes(t) ||
+                    productType.includes(t) ||
+                    variantTitles.some((vt) => vt.includes(t))
+                );
+              });
+            }
             resultText = resultText || (listResult.text || '').trim();
             console.log('[order-chat] fallback list_products results:', {
               count: products.length,
