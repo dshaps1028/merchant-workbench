@@ -8,7 +8,6 @@ import {
 	ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-// Shopify Admin API configuration
 const accessTokenArg = process.argv.find((arg) => arg.startsWith('--accessToken='));
 const domainArg = process.argv.find((arg) => arg.startsWith('--domain='));
 
@@ -26,7 +25,6 @@ if (!SHOPIFY_ACCESS_TOKEN || !SHOPIFY_DOMAIN) {
 	process.exit(1);
 }
 
-// Use a current Shopify API version to avoid 406 Not Acceptable responses on newer stores.
 const SHOPIFY_API_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/`;
 
 class ShopifyMCPServer {
