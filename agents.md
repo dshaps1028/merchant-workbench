@@ -13,6 +13,12 @@ This repo contains an Electron shell plus a local Shopify MCP server. When worki
 - JavaScript: prefer 2-space indentation, trailing commas where valid, and semicolons at statement ends. Use single quotes for strings except when interpolation requires template literals. Keep imports sorted by module path.
 - JSON: format with 2-space indentation, double-quoted keys/strings, and no trailing commas. When editing config files, keep object keys alphabetized for readability.
 
+## PR reviews
+- Focus on correctness first: call out bugs, regressions, and missing tests before style nits. Cite files/lines.
+- Always suggest at least one additional unit test and any clear refactors that improve safety/readability. Post these suggestions as PR comments (not just in review body).
+- If the change touches MCP or DB, recommend coverage for the new paths (e.g., db helpers, MCP handlers) and note any env/setup needed to run the tests.
+- Keep feedback concise and actionable; avoid blocking on minor styling unless it impacts behavior.
+
 ## Before pushing a PR
 - Run `git status` to ensure `mcp-server/.env` and `node_modules` are untracked.
 - Run the app (`npm run dev`) to confirm the UI loads and the MCP server starts without missing env errors.
