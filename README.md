@@ -50,6 +50,10 @@ You can run the Electron shell and MCP server separately or together. Run these 
   # Terminal 2: launch the Electron shell
   npm start
   ```
+- Preferred dev shortcut (spawns the Electron shell; run the MCP server separately if needed):
+  ```bash
+  npm run dev
+  ```
 
 If you run the MCP server manually, ensure it is listening on the `PORT` you configured in `.env` before launching the Electron app.
 
