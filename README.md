@@ -89,3 +89,17 @@ The order search bar accepts natural language date phrases: explicit dates (`202
 - `preload.js`: Preload script for the renderer.
 - `renderer.js`: Renderer-side logic for the UI loaded by `index.html`.
 - `index.html`: HTML entry point for the renderer.
+- `utils.js`: Shared helpers for date parsing, fuzzy typo handling, and tag parsing.
+- `db.js`: sql.js-backed automation storage (writes `automations.sqlite` locally).
+
+## Testing
+Unit tests are powered by Jest and live under `tests/`. Current coverage:
+- Utils: date range parsing (explicit dates, months, relative ranges, fuzzy typos like “yesterdy”), tag parsing, and normalization helpers.
+- Automations DB (sql.js): persistence of automations, JSON snapshots, and scheduling fields (`last_run`, `next_run`).
+- Auth helpers: keytar-backed credential storage and active shop tracking.
+
+Run the suite:
+```bash
+npm test
+```
+The test runner is headless and does not require the Electron UI to be running.

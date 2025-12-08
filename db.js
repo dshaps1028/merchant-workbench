@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const initSqlJs = require('sql.js');
 
-const dbPath = path.join(__dirname, 'automations.sqlite');
+const dbPath = process.env.AUTOMATIONS_DB_PATH || path.join(__dirname, 'automations.sqlite');
 let dbPromise = null;
 
 const ensureDb = async () => {
