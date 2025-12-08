@@ -30,6 +30,10 @@ Basic Electron application scaffold for the Merchant Workbench desktop app.
 ## Running the App
 You can run the Electron shell and MCP server separately or together. Run these commands from the repo root:
 
+- Preferred dev shortcut (spawns the Electron shell; run the MCP server separately if needed):
+  ```bash
+  npm run dev
+  ```
 - Start only the Electron app (uses the MCP HTTP bridge if already running):
   ```bash
   npm start
@@ -49,10 +53,6 @@ You can run the Electron shell and MCP server separately or together. Run these 
 
   # Terminal 2: launch the Electron shell
   npm start
-  ```
-- Preferred dev shortcut (spawns the Electron shell; run the MCP server separately if needed):
-  ```bash
-  npm run dev
   ```
 
 If you run the MCP server manually, ensure it is listening on the `PORT` you configured in `.env` before launching the Electron app.
