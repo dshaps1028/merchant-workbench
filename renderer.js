@@ -51,7 +51,32 @@ const Modal = ({ order, onClose, onEdit }) => {
     financial_status: order.financial_status || 'unknown',
     fulfillment_status: order.fulfillment_status || 'unfulfilled',
     created_at: order.created_at,
-    line_items: Array.isArray(order.line_items) ? order.line_items : []
+    line_items: Array.isArray(order.line_items) ? order.line_items : [],
+    customer_name:
+      (order.customer &&
+        [order.customer.first_name, order.customer.last_name].filter(Boolean).join(' ')) ||
+      (order.shipping_address && order.shipping_address.name) ||
+      '',
+    phone:
+      order.phone ||
+      (order.customer && order.customer.phone) ||
+      (order.shipping_address && order.shipping_address.phone) ||
+      '',
+    shipping_address: order.shipping_address || null,
+    billing_address: order.billing_address || null,
+    tags: order.tags || '',
+    note: order.note || ''
+  };
+  const formatAddress = (addr) => {
+    if (!addr) return '—';
+    const parts = [
+      addr.name,
+      [addr.address1, addr.address2].filter(Boolean).join(' ').trim(),
+      [addr.city, addr.province_code, addr.zip].filter(Boolean).join(', ').replace(/^, /, ''),
+      addr.country,
+      addr.phone
+    ].filter(Boolean);
+    return parts.length ? parts.join('\n') : '—';
   };
   return h(
     'div',
@@ -157,6 +182,44 @@ const Modal = ({ order, onClose, onEdit }) => {
         `Date: ${
           safeOrder.created_at ? new Date(safeOrder.created_at).toLocaleString() : 'N/A'
         }`
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Customer: ${safeOrder.customer_name || 'Guest'}${
+          safeOrder.phone ? ` • ${safeOrder.phone}` : ''
+        }`
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Tags: ${safeOrder.tags ? safeOrder.tags : '—'}`
+      ),
+      safeOrder.note
+        ? h('p', { className: 'order-sub', style: { whiteSpace: 'pre-wrap' } }, `Note: ${safeOrder.note}`)
+        : null,
+      h(
+        'div',
+        {
+          style: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '10px',
+            marginTop: '10px'
+          }
+        },
+        h(
+          'div',
+          { className: 'order-sub', style: { whiteSpace: 'pre-wrap' } },
+          h('strong', null, 'Shipping'),
+          h('div', null, formatAddress(safeOrder.shipping_address))
+        ),
+        h(
+          'div',
+          { className: 'order-sub', style: { whiteSpace: 'pre-wrap' } },
+          h('strong', null, 'Billing'),
+          h('div', null, formatAddress(safeOrder.billing_address))
+        )
       ),
       h(
         'div',
