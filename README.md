@@ -11,10 +11,11 @@ Basic Electron application scaffold for the Merchant Workbench desktop app.
    ```bash
    npm install
    ```
-2. Install local Shopify MCP server dependencies:
+2. Install local Shopify MCP server dependencies (run from the repo root):
    ```bash
    cd mcp-server
    npm install
+   cd ..
    ```
 
 ## Environment configuration
@@ -27,7 +28,7 @@ Basic Electron application scaffold for the Merchant Workbench desktop app.
 2. Keep this file out of version control; it is already ignored by Git.
 
 ## Running the app
-You can run the Electron shell and MCP server separately or together:
+You can run the Electron shell and MCP server separately or together. Run these commands from the repo root:
 
 - Start only the Electron app (uses the MCP HTTP bridge if already running):
   ```bash
@@ -37,13 +38,17 @@ You can run the Electron shell and MCP server separately or together:
   ```bash
   npm run start:mcp
   ```
-- Start the MCP server with the HTTP bridge:
+- Start the MCP server with the HTTP bridge (leave this running in its own terminal when you want HTTP access):
   ```bash
   npm run start:mcp:http
   ```
-- Start the MCP server (HTTP bridge) and Electron shell together for local development:
+- Start the MCP server (HTTP bridge) and Electron shell together for local development (two terminals):
   ```bash
-  npm run dev
+  # Terminal 1: start the MCP server over HTTP
+  npm run start:mcp:http
+
+  # Terminal 2: launch the Electron shell
+  npm start
   ```
 
 If you run the MCP server manually, ensure it is listening on the `PORT` you configured in `.env` before launching the Electron app.
@@ -57,7 +62,7 @@ The included MCP server (launched from `mcp-server/index.js`) uses the Model Con
 - `created_at_min` / `created_at_max`: ISO8601 timestamps bounding the created-at window
 - `email`: customer email address
 
-The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http` or `npm run dev`.
+The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http`.
 
 ## Project structure
 - `main.js`: Electron main process that creates the browser window.
