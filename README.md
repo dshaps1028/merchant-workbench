@@ -69,6 +69,15 @@ The server exposes a Shopify-focused tool set through the Model Context Protocol
 
 The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http`.
 
+## Authentication (private app tokens)
+This build uses Shopify private app tokens (no OAuth redirect) because private apps don’t support redirect URLs. To connect:
+1) In your Shopify admin: Settings → Apps and sales channels → Develop apps → create/open your custom app.
+2) Grant the scopes you need (e.g., read/write orders) and allow required permissions.
+3) Under API credentials, copy:
+   - Admin API access token (used as the token)
+   - Shop domain (e.g., `your-shop.myshopify.com`)
+4) In the app, click “Connect Shopify” and enter the shop domain and Admin API access token. These are stored securely via keytar (OS keychain) and never exposed to end-users. Env `.env` is only a dev fallback; search/create flows require a connected shop.
+
 ## Search date parsing & typo tolerance
 The order search bar accepts natural language date phrases: explicit dates (`2025-09-12`), month ranges (`September 2025`), relative ranges (`yesterday`, `last week`, `past month`, `last year`), and weekdays (`last Sunday`). A lightweight fuzzy pass (Levenshtein distance ≤ 2 against known date terms) normalizes minor misspellings (e.g., “yesterdy” → “yesterday”). When a fuzzy correction is applied, a warning string is returned alongside the derived date range so the UI can surface it if desired. This helps avoid overly broad results when users mistype date phrases.
 

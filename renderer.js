@@ -1100,6 +1100,11 @@ function App() {
   const [automationInput, setAutomationInput] = useState('');
   const [automationProcessing, setAutomationProcessing] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState(null);
+  const [shopState, setShopState] = useState({ shops: [], active: '', status: 'Checking…' });
+  const [clientCredStatus, setClientCredStatus] = useState('Not set');
+  const [shopDomainInput, setShopDomainInput] = useState('');
+  const [shopTokenInput, setShopTokenInput] = useState('');
+  const [showConnectModal, setShowConnectModal] = useState(false);
   const messagesEndRef = useRef(null);
   const editMessagesEndRef = useRef(null);
   const automationMessagesEndRef = useRef(null);
@@ -1126,6 +1131,28 @@ function App() {
     setStatus('Ready');
   }, []);
 
+  useEffect(() => {
+    const loadAuth = async () => {
+      try {
+        const shops = (await window.electronAPI.oauthList()) || [];
+        const activeInfo = (await window.electronAPI.oauthGetActive()) || {};
+        const creds = (await window.electronAPI.oauthGetClientCreds()) || {};
+        setShopState({
+          shops,
+          active: activeInfo.shop || '',
+          status: activeInfo.shop ? `Connected: ${activeInfo.shop}` : 'Not connected'
+        });
+        setClientCredStatus(
+          creds.clientId && creds.clientSecret ? 'Client credentials set' : 'Client credentials not set'
+        );
+      } catch (error) {
+        setShopState((prev) => ({ ...prev, status: 'Auth error' }));
+        console.error('OAuth load error', error);
+      }
+    };
+    loadAuth();
+  }, []);
+
   const addLog = ({ count, label, details, ordersSnapshot }) => {
     setLogs((prev) => [
       ...prev,
@@ -1137,6 +1164,49 @@ function App() {
         ordersSnapshot: ordersSnapshot || []
       }
     ]);
+  };
+
+  const requireShopConnection = () => {
+    if (!shopState.active) {
+      setOrdersError('Please connect your Shopify shop before searching or creating orders.');
+      setStatus('Not connected');
+      return false;
+    }
+    return true;
+  };
+
+  const handleConnectShopify = async () => {
+    if (!window.electronAPI?.oauthSetToken) {
+      alert('Shopify connection is not available in this build. Please restart after installing dependencies.');
+      return;
+    }
+    const shop = (shopDomainInput || '').trim();
+    const token = (shopTokenInput || '').trim();
+    if (!shop || !token) {
+      alert('Please enter both shop domain and Admin API access token.');
+      return;
+    }
+    try {
+      setStatus('Connecting to Shopify…');
+      await window.electronAPI.oauthSetToken(shop, token);
+      await window.electronAPI.oauthSetActive(shop);
+      const shops = (await window.electronAPI.oauthList()) || [];
+      const activeInfo = (await window.electronAPI.oauthGetActive()) || {};
+      setShopState({
+        shops,
+        active: activeInfo.shop || '',
+        status: activeInfo.shop ? `Connected: ${activeInfo.shop}` : 'Not connected'
+      });
+      setShopDomainInput('');
+      setShopTokenInput('');
+      setShowConnectModal(false);
+      setStatus('Ready');
+      alert('Shop connected. If needed, restart the MCP connection by running a search.');
+    } catch (error) {
+      console.error('Shopify connect error', error);
+      setStatus('Error');
+      alert(error?.message || 'Failed to connect to Shopify.');
+    }
   };
 
   const handleAction = () => {};
@@ -1309,6 +1379,7 @@ function App() {
   };
 
   const handleFetchOrders = async (queryParams = {}) => {
+    if (!requireShopConnection()) return;
     setOrdersLoading(true);
     setOrdersError('');
     setStatus('Fetching orders…');
@@ -1446,6 +1517,7 @@ function App() {
   };
 
   const handleCreateOrder = async (draftOverride) => {
+    if (!requireShopConnection()) return;
     if (!window.electronAPI?.mcpCreateOrder) {
       setOrdersError('Order creation tool is not available.');
       setStatus('Error');
@@ -1546,6 +1618,7 @@ function App() {
   };
 
   const handleProductSearch = async (overrideQuery) => {
+    if (!requireShopConnection()) return;
     if (!window.electronAPI?.mcpSearchProducts) {
       setProductError('Product search tool is not available.');
       setChatMessages((prev) => [
@@ -1652,6 +1725,7 @@ function App() {
   };
 
   const handleSendMessage = async (text) => {
+    if (!requireShopConnection()) return;
     if (!text || !text.trim()) return;
     const trimmed = text.trim();
     setShowScheduleModal(true);
@@ -1808,6 +1882,7 @@ function App() {
   };
 
   const handleCodexOrders = async () => {
+    if (!requireShopConnection()) return;
     if (!nlQuery.trim()) {
       return;
     }
@@ -2091,6 +2166,35 @@ function App() {
         h(
           Main,
           null,
+          h(
+            'div',
+            {
+              style: {
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexWrap: 'wrap'
+              }
+            },
+            h(
+              'button',
+              {
+                onClick: () => setShowConnectModal(true),
+                style: {
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  background: '#000',
+                  color: '#fff',
+                  fontWeight: 700,
+                  letterSpacing: '0.3px',
+                  cursor: 'pointer'
+                }
+              },
+              shopState.active ? 'Reconnect Shopify' : 'Connect Shopify'
+            ),
+            h('span', { className: 'order-sub' }, `${shopState.status}`)
+          ),
           showScheduleModal
             ? h(ScheduleModal, {
                 onClose: () => {
@@ -2196,6 +2300,134 @@ function App() {
         submitting: automationProcessing,
         messagesEndRef: automationMessagesEndRef
       }),
+      showConnectModal
+        ? h(
+            'div',
+            {
+              style: {
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.78)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: '20px'
+              },
+              onClick: () => setShowConnectModal(false)
+            },
+            h(
+              'div',
+              {
+                style: {
+                  background: 'rgba(255,255,255,0.12)',
+                  color: '#e8f4ec',
+                  borderRadius: '6px',
+                  padding: '20px',
+                  width: 'min(520px, 90vw)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
+                  position: 'relative'
+                },
+                onClick: (e) => e.stopPropagation()
+              },
+              h(
+                'button',
+                {
+                  onClick: () => setShowConnectModal(false),
+                  style: {
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: '#000',
+                    borderRadius: '6px',
+                    width: '28px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#e8f4ec',
+                    border: '1px solid rgba(255,255,255,0.15)'
+                  }
+                },
+                '✕'
+              ),
+              h('h2', null, shopState.active ? 'Reconnect Shopify' : 'Connect Shopify'),
+              h(
+                'p',
+                { className: 'order-sub', style: { marginBottom: '8px' } },
+                'Enter your shop domain and Admin API access token. Tokens are stored securely and never exposed to end-users.'
+              ),
+              h('input', {
+                type: 'text',
+                placeholder: 'my-shop.myshopify.com',
+                value: shopDomainInput,
+                onChange: (e) => setShopDomainInput(e.target.value),
+                style: {
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  marginBottom: '10px',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#e8f4ec'
+                }
+              }),
+              h('input', {
+                type: 'password',
+                placeholder: 'Admin API access token',
+                value: shopTokenInput,
+                onChange: (e) => setShopTokenInput(e.target.value),
+                style: {
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  marginBottom: '12px',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#e8f4ec'
+                }
+              }),
+              h(
+                'div',
+                { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px' } },
+                h(
+                  'button',
+                  {
+                    onClick: () => setShowConnectModal(false),
+                    style: {
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(255,255,255,0.2)',
+                      color: '#0f1b14',
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: 'pointer'
+                    }
+                  },
+                  'Cancel'
+                ),
+                h(
+                  'button',
+                  {
+                    onClick: handleConnectShopify,
+                    style: {
+                      padding: '10px 14px',
+                      borderRadius: '6px',
+                      background: '#000',
+                      color: '#fff',
+                      fontWeight: 700,
+                      letterSpacing: '0.3px',
+                      cursor: 'pointer'
+                    }
+                  },
+                  'Save & Connect'
+                )
+              )
+            )
+          )
+        : null,
           h(
             Panel,
             {

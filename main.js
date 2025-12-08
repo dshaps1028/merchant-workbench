@@ -1,5 +1,15 @@
 const path = require('path');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
+const {
+  startOAuth,
+  listShops,
+  getActiveShopCredentials,
+  getTokenForShop,
+  writeActiveShop,
+  setClientCreds,
+  getClientCreds,
+  setShopToken
+} = require('./auth');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -19,6 +29,39 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+
+  ipcMain.handle('oauth:start', async (_event, shop) => {
+    return startOAuth(shop);
+  });
+
+  ipcMain.handle('oauth:list', async () => {
+    return listShops();
+  });
+
+  ipcMain.handle('oauth:getActive', async () => {
+    return getActiveShopCredentials();
+  });
+
+  ipcMain.handle('oauth:setActive', async (_event, shop) => {
+    writeActiveShop(shop || '');
+    const token = shop ? await getTokenForShop(shop) : '';
+    return { shop: shop || '', token: token || '' };
+  });
+
+  ipcMain.handle('oauth:setClientCreds', async (_event, id, secret) => {
+    await setClientCreds(id, secret);
+    return { ok: true };
+  });
+
+  ipcMain.handle('oauth:getClientCreds', async () => {
+    const creds = await getClientCreds();
+    return creds;
+  });
+
+  ipcMain.handle('oauth:setToken', async (_event, shop, token) => {
+    const result = await setShopToken(shop, token);
+    return result;
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

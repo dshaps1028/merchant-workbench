@@ -1,4 +1,4 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
 const path = require('path');
@@ -47,6 +47,19 @@ console.log(
   !!process.env.SHOPIFY_ACCESS_TOKEN
 );
 console.log('[preload] .env.local loaded (if present)');
+
+const hydrateShopCredentials = async () => {
+  try {
+    const creds = await ipcRenderer.invoke('oauth:getActive');
+    if (creds && creds.shop && creds.token) {
+      process.env.SHOPIFY_DOMAIN = creds.shop;
+      process.env.SHOPIFY_ACCESS_TOKEN = creds.token;
+      console.log('[preload] Active shop loaded from keytar:', creds.shop);
+    }
+  } catch (error) {
+    console.error('[preload] Failed to load active shop credentials', error);
+  }
+};
 
 const getCodexThread = async () => {
   if (!codexThreadPromise) {
@@ -331,6 +344,7 @@ const getMcpClient = async () => {
 
 const mcpListOrders = async (params) => {
   try {
+    await hydrateShopCredentials();
     const { client } = await getMcpClient();
     const result = await client.callTool({
       name: 'list_orders',
@@ -356,6 +370,7 @@ const mcpListOrders = async (params) => {
 
 const mcpCreateOrder = async (params) => {
   try {
+    await hydrateShopCredentials();
     const { client } = await getMcpClient();
     const result = await client.callTool({
       name: 'create_order',
@@ -406,6 +421,7 @@ const mcpUpdateOrder = async (params) => {
 
 const mcpSearchProducts = async (params) => {
   try {
+    await hydrateShopCredentials();
     const { client } = await getMcpClient();
     const result = await client.callTool({
       name: 'search_products',
@@ -431,6 +447,7 @@ const mcpSearchProducts = async (params) => {
 
 const mcpListProducts = async (params) => {
   try {
+    await hydrateShopCredentials();
     const { client } = await getMcpClient();
     const result = await client.callTool({
       name: 'list_products',
@@ -458,6 +475,13 @@ const api = {
   ping: () => 'ready',
   codexOrders,
   codexOrderComposer,
+  oauthStart: (shop) => ipcRenderer.invoke('oauth:start', shop),
+  oauthList: () => ipcRenderer.invoke('oauth:list'),
+  oauthGetActive: () => ipcRenderer.invoke('oauth:getActive'),
+  oauthSetActive: (shop) => ipcRenderer.invoke('oauth:setActive', shop),
+  oauthSetClientCreds: (id, secret) => ipcRenderer.invoke('oauth:setClientCreds', id, secret),
+  oauthGetClientCreds: () => ipcRenderer.invoke('oauth:getClientCreds'),
+  oauthSetToken: (shop, token) => ipcRenderer.invoke('oauth:setToken', shop, token),
   mcpListOrders,
   mcpCreateOrder,
   mcpUpdateOrder,
