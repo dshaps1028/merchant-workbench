@@ -48,11 +48,6 @@ If you run the MCP server manually, ensure it is listening on the `PORT` you con
 ## MCP Server Details
 The included MCP server (launched from `mcp-server/index.js`) is a local clone of [`@akson/mcp-shopify`](https://github.com/antoineschaller/shopify-mcp-server). Keeping the source checked into this repo makes it easy to run locally and apply customizations without publishing a new npm package.
 
-### Local Enhancements
-- Added a `create_orders` tool to generate Shopify orders directly from Claude, complementing the existing order management commands.
-- Added an `update_order` tool to edit tags, notes, and contact fields for existing orders (used by the bulk/single edit flows).
-- Expanded `list_orders` filtering to support status, fulfillment state, created-at bounds, email, order ID, order number/name, and customer name.
-
 ### Core Tools
 The UI currently relies on these MCP tools:
 - `list_orders`: fetches orders with filters (status, fulfillment, date range, email, ID/number/name, SKU).
@@ -64,6 +59,11 @@ The UI currently relies on these MCP tools:
 The full tool catalog (including customer and analytics helpers) is documented in `mcp-server/TOOLS.md`.
 
 The Electron app connects to this MCP server over stdio by default.
+
+### Local Enhancements
+- Added a `create_order` tool to generate Shopify orders directly from Claude, complementing the existing order management commands.
+- Added an `update_order` tool to edit tags, notes, and contact fields for existing orders (used by the bulk/single edit flows).
+- Expanded `list_orders` filtering to support status, fulfillment state, created-at bounds, email, order ID, order number/name, and customer name.
 
 ## Authentication (private app tokens)
 This build uses Shopify private app tokens (no OAuth redirect) because private apps don’t support redirect URLs. To connect:
