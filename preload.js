@@ -482,6 +482,8 @@ const api = {
   oauthSetClientCreds: (id, secret) => ipcRenderer.invoke('oauth:setClientCreds', id, secret),
   oauthGetClientCreds: () => ipcRenderer.invoke('oauth:getClientCreds'),
   oauthSetToken: (shop, token) => ipcRenderer.invoke('oauth:setToken', shop, token),
+  automationsList: () => ipcRenderer.invoke('automations:list'),
+  automationsSave: (payload) => ipcRenderer.invoke('automations:save', payload),
   mcpListOrders,
   mcpCreateOrder,
   mcpUpdateOrder,

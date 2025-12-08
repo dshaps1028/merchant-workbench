@@ -10,6 +10,7 @@ const {
   getClientCreds,
   setShopToken
 } = require('./auth');
+const { listAutomations, saveAutomation } = require('./db');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -61,6 +62,14 @@ app.whenReady().then(() => {
   ipcMain.handle('oauth:setToken', async (_event, shop, token) => {
     const result = await setShopToken(shop, token);
     return result;
+  });
+
+  ipcMain.handle('automations:list', async () => {
+    return listAutomations();
+  });
+
+  ipcMain.handle('automations:save', async (_event, payload) => {
+    return saveAutomation(payload || {});
   });
 
   app.on('activate', () => {

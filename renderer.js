@@ -1153,17 +1153,49 @@ function App() {
     loadAuth();
   }, []);
 
-  const addLog = ({ count, label, details, ordersSnapshot }) => {
-    setLogs((prev) => [
-      ...prev,
-      {
-        time: new Date(),
-        count,
-        label: label || 'Saved query',
-        details,
-        ordersSnapshot: ordersSnapshot || []
+  useEffect(() => {
+    const loadAutomations = async () => {
+      if (!window.electronAPI?.automationsList) return;
+      try {
+        const items = (await window.electronAPI.automationsList()) || [];
+        setLogs(
+          items.map((row) => ({
+            time: new Date(row.created_at || Date.now()),
+            count: row.orders_snapshot ? (Array.isArray(row.orders_snapshot) ? row.orders_snapshot.length : 0) : 0,
+            label: row.label || 'Automation',
+            details: `Schedule: ${row.schedule || ''}\nAction: ${row.action || ''}`,
+            ordersSnapshot: row.orders_snapshot || []
+          }))
+        );
+      } catch (error) {
+        console.error('Failed to load automations', error);
       }
-    ]);
+    };
+    loadAutomations();
+  }, []);
+
+  const addLog = async ({ count, label, details, ordersSnapshot }) => {
+    const entry = {
+      time: new Date(),
+      count,
+      label: label || 'Saved query',
+      details,
+      ordersSnapshot: ordersSnapshot || []
+    };
+    setLogs((prev) => [...prev, entry]);
+    if (window.electronAPI?.automationsSave) {
+      try {
+        await window.electronAPI.automationsSave({
+          label: label || 'Automation',
+          schedule: details?.split('\n').find((l) => l.toLowerCase().startsWith('schedule:')) || '',
+          action: details?.split('\n').find((l) => l.toLowerCase().startsWith('action:')) || '',
+          search_query: lastQueryLabel || '',
+          orders_snapshot: ordersSnapshot || []
+        });
+      } catch (error) {
+        console.error('Failed to persist automation', error);
+      }
+    }
   };
 
   const requireShopConnection = () => {

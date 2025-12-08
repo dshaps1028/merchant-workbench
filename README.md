@@ -78,6 +78,9 @@ This build uses Shopify private app tokens (no OAuth redirect) because private a
    - Shop domain (e.g., `your-shop.myshopify.com`)
 4) In the app, click “Connect Shopify” and enter the shop domain and Admin API access token. These are stored securely via keytar (OS keychain) and never exposed to end-users. Env `.env` is only a dev fallback; search/create flows require a connected shop.
 
+## Automation storage
+Automations are persisted locally in a SQLite file (via `sql.js`, stored as `automations.sqlite` in the project directory). The schema includes: `id`, `label`, `schedule`, `action`, `search_query`, `orders_snapshot` (JSON string), `created_at`, `last_run`, and `next_run`. No external DB service is required.
+
 ## Search date parsing & typo tolerance
 The order search bar accepts natural language date phrases: explicit dates (`2025-09-12`), month ranges (`September 2025`), relative ranges (`yesterday`, `last week`, `past month`, `last year`), and weekdays (`last Sunday`). A lightweight fuzzy pass (Levenshtein distance ≤ 2 against known date terms) normalizes minor misspellings (e.g., “yesterdy” → “yesterday”). When a fuzzy correction is applied, a warning string is returned alongside the derived date range so the UI can surface it if desired. This helps avoid overly broad results when users mistype date phrases.
 
