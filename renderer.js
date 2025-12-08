@@ -595,6 +595,7 @@ const deriveDateRangeFromQuery = (query, existingMin, existingMax) => {
   const dayMs = 24 * 60 * 60 * 1000;
   let rangeStart = null;
   let rangeEnd = null;
+  const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
   const explicitDateMatch =
     query.match(/\b\d{4}-\d{2}-\d{2}\b/) ||
@@ -623,6 +624,22 @@ const deriveDateRangeFromQuery = (query, existingMin, existingMax) => {
         !monthOnlyMatch[2] && monthIndex > now.getMonth() ? now.getFullYear() - 1 : year;
       rangeStart = new Date(effectiveYear, monthIndex, 1, 0, 0, 0, 0);
       rangeEnd = new Date(effectiveYear, monthIndex + 1, 0, 23, 59, 59, 999);
+    }
+  } else if (lcQuery.match(/\b(last|this)?\s*(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/)) {
+    const weekdayMatch = lcQuery.match(/\b(last|this)?\s*(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+    const mode = weekdayMatch && weekdayMatch[1] ? weekdayMatch[1].trim() : '';
+    const dayToken = weekdayMatch ? weekdayMatch[2] : '';
+    const targetIndex = weekdayNames.indexOf(dayToken);
+    if (targetIndex !== -1) {
+      const now = new Date();
+      const nowIndex = now.getDay(); // 0 = Sunday
+      let diff = (nowIndex - targetIndex + 7) % 7;
+      if (mode === 'last' && diff === 0) {
+        diff = 7; // force previous week
+      }
+      const targetDate = new Date(now.getTime() - diff * dayMs);
+      rangeStart = startOfDay(targetDate);
+      rangeEnd = endOfDay(targetDate);
     }
   } else if (lcQuery.includes('last year')) {
     const now = new Date();
