@@ -471,6 +471,11 @@ const mcpListProducts = async (params) => {
   }
 };
 
+const saveOrdersResult = (payload) => ipcRenderer.invoke('orders:saveResult', payload);
+const listSavedOrders = (limit = 1) => ipcRenderer.invoke('orders:list', limit);
+const saveCreatedOrders = (payload) => ipcRenderer.invoke('ordersCreated:save', payload);
+const listCreatedOrders = (limit = 1) => ipcRenderer.invoke('ordersCreated:list', limit);
+
 const api = {
   ping: () => 'ready',
   codexOrders,
@@ -484,6 +489,10 @@ const api = {
   oauthSetToken: (shop, token) => ipcRenderer.invoke('oauth:setToken', shop, token),
   automationsList: () => ipcRenderer.invoke('automations:list'),
   automationsSave: (payload) => ipcRenderer.invoke('automations:save', payload),
+  ordersCacheSave: saveOrdersResult,
+  ordersCacheList: listSavedOrders,
+  ordersCreatedSave: saveCreatedOrders,
+  ordersCreatedList: listCreatedOrders,
   mcpListOrders,
   mcpCreateOrder,
   mcpUpdateOrder,
