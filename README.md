@@ -50,13 +50,18 @@ The included MCP server (launched from `mcp-server/index.js`) is a local clone o
 
 ### Local Enhancements
 - Added a `create_orders` tool to generate Shopify orders directly from Claude, complementing the existing order management commands.
+- Added an `update_order` tool to edit tags, notes, and contact fields for existing orders (used by the bulk/single edit flows).
 - Expanded `list_orders` filtering to support status, fulfillment state, created-at bounds, email, order ID, order number/name, and customer name.
 
 ### Core Tools
-The server exposes a Shopify-focused tool set through the Model Context Protocol, including:
-
-- `list_orders`: returns Shopify order data with the filters listed above.
+The UI currently relies on these MCP tools:
+- `list_orders`: fetches orders with filters (status, fulfillment, date range, email, ID/number/name, SKU).
 - `create_order`: creates a single order with line items and customer details.
+- `update_order`: used by the bulk/single edit flows to update notes, tags, email/phone.
+- `search_products`: finds products/variants by query (used for SKUs/variant IDs).
+- `list_products`: fallback listing of products/variants when no query is provided.
+
+The full tool catalog (including customer and analytics helpers) is documented in `mcp-server/TOOLS.md`.
 
 The Electron app connects to this MCP server over stdio by default.
 
