@@ -54,13 +54,18 @@ You can run the Electron shell and MCP server separately or together. Run these 
 If you run the MCP server manually, ensure it is listening on the `PORT` you configured in `.env` before launching the Electron app.
 
 ## MCP server details
-The included MCP server (launched from `mcp-server/index.js`) uses the Model Context Protocol SDK to expose a Shopify-focused tool set. The primary tool today is `list_orders`, which returns Shopify order data and supports filtering by:
+The included MCP server (launched from `mcp-server/index.js`) is a local clone of [`@akson/mcp-shopify`](https://github.com/antoineschaller/shopify-mcp-server). Keeping the source checked into this repo makes it easy to run locally and apply customizations without publishing a new npm package.
 
-- `limit`: maximum number of orders to return (up to 50)
-- `status`: order status filter
-- `fulfillment_status`: fulfillment state filter
-- `created_at_min` / `created_at_max`: ISO8601 timestamps bounding the created-at window
-- `email`: customer email address
+### Local enhancements
+- Added a `create_orders` tool to generate Shopify orders directly from Claude, complementing the existing order management commands.
+- Expanded `list_orders` filtering to support status, fulfillment state, created-at bounds, email, order ID, order number/name, and customer name.
+- Preserved the HTTP bridge (`npm run start:mcp:http`) so the renderer can talk to the MCP server over HTTP during development, while stdio remains the default for Electron.
+
+### Core tools
+The server exposes a Shopify-focused tool set through the Model Context Protocol, including:
+
+- `list_orders`: returns Shopify order data with the filters listed above.
+- `create_order`: creates a single order with line items and customer details.
 
 The Electron app connects to this MCP server over stdio by default and can also communicate through the optional HTTP bridge when started with `npm run start:mcp:http`.
 
