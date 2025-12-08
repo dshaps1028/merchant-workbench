@@ -30,10 +30,11 @@ Basic Electron application scaffold for the Merchant Workbench desktop app.
 ## Running the App
 You can run the Electron shell and MCP server separately or together. Run these commands from the repo root:
 
-- Preferred dev shortcut (spawns the Electron shell; run the MCP server separately if needed):
+- Preferred dev shortcut (runs MCP over stdio with stored creds + Electron together in one terminal):
   ```bash
   npm run dev
   ```
+  This starts the MCP server over stdio in the background using the Shopify domain/token saved via the Connect Shopify flow (keytar), then launches Electron. When you’re done, stop the terminal to kill both.
 - Start only the Electron app (connects to the MCP server over stdio):
   ```bash
   npm start

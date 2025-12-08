@@ -8,7 +8,7 @@
     "start": "electron .",
     "start:mcp": "cd mcp-server && npm start",
     "start:mcp:http": "cd mcp-server && npm run start:http",
-    "dev": "npm start",
+    "dev": "sh -c \"node scripts/start-mcp-stdio.js & npm start\"",
     "test": "jest"
   },
   "devDependencies": {

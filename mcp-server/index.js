@@ -26,7 +26,8 @@ if (!SHOPIFY_ACCESS_TOKEN || !SHOPIFY_DOMAIN) {
 	process.exit(1);
 }
 
-const SHOPIFY_API_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2023-10/`;
+// Use a current Shopify API version to avoid 406 Not Acceptable responses on newer stores.
+const SHOPIFY_API_URL = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/`;
 
 class ShopifyMCPServer {
 	constructor() {
@@ -210,11 +211,11 @@ class ShopifyMCPServer {
 							},
 						},
 					},
-					{
-						name: 'create_order',
-						description: 'Create a new order with line items and customer details',
-						inputSchema: {
-							type: 'object',
+				{
+					name: 'create_order',
+					description: 'Create a new order with line items and customer details',
+					inputSchema: {
+						type: 'object',
 							properties: {
 								email: { type: 'string', description: 'Customer email', nullable: true },
 								line_items: {
@@ -263,9 +264,9 @@ class ShopifyMCPServer {
 								fulfillment_status: { type: 'string', nullable: true },
 							},
 							required: ['order_id'],
-						},
 					},
-					{
+				},
+				{
 					name: 'get_order',
 					description: 'Get detailed information about a specific order',
 					inputSchema: {
@@ -611,6 +612,7 @@ class ShopifyMCPServer {
 			headers: {
 				'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
 				'Content-Type': 'application/json',
+				Accept: 'application/json',
 				...options.headers,
 			},
 			...options,
@@ -618,9 +620,9 @@ class ShopifyMCPServer {
 
 		if (!response.ok) {
 			const errorText = await response.text();
-			throw new Error(
-				`Shopify API error: ${response.status} ${response.statusText} - ${errorText}`
-			);
+			const msg = `Shopify API error: ${response.status} ${response.statusText} - ${errorText}`;
+			console.error('[shopifyRequest]', msg);
+			throw new Error(msg);
 		}
 
 		return await response.json();
@@ -1095,6 +1097,14 @@ class ShopifyMCPServer {
 		};
 	}
 
+	async fulfillOrder(args = {}) {
+		if (!args.order_id) {
+			throw new Error('order_id is required');
+		}
+
+		throw new Error('fulfill_order tool removed');
+	}
+
 	async updateOrder(args = {}) {
 		const orderId = args.order_id;
 		if (!orderId) {
@@ -1478,6 +1488,7 @@ class ShopifyMCPServer {
 							.join('\n\n'),
 				},
 			],
+			structuredContent: { locations: data.locations },
 		};
 	}
 
