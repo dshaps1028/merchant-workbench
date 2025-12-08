@@ -16,19 +16,36 @@ const ensureDb = async () => {
       } else {
         db = new SQL.Database();
       }
-    db.run(`
-      CREATE TABLE IF NOT EXISTS automations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        label TEXT NOT NULL,
-        schedule TEXT NOT NULL,
-        action TEXT NOT NULL,
-        search_query TEXT,
-        orders_snapshot TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_run DATETIME,
-        next_run DATETIME
-      );
-    `);
+      db.run(`
+        CREATE TABLE IF NOT EXISTS automations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          label TEXT NOT NULL,
+          schedule TEXT NOT NULL,
+          action TEXT NOT NULL,
+          search_query TEXT,
+          orders_snapshot TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          last_run DATETIME,
+          next_run DATETIME
+        );
+      `);
+      db.run(`
+        CREATE TABLE IF NOT EXISTS order_results (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          label TEXT,
+          search_query TEXT,
+          orders_json TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      db.run(`
+        CREATE TABLE IF NOT EXISTS created_orders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          label TEXT,
+          orders_json TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
       // Backfill new columns if migrating from older schema
       const tableInfo = db.exec("PRAGMA table_info('automations');");
       const columns = tableInfo?.[0]?.values?.map((row) => row[1]) || [];
@@ -97,7 +114,101 @@ const saveAutomation = async (payload = {}) => {
   return entry;
 };
 
+const listOrderResults = async (limit = 1) => {
+  const { db } = await ensureDb();
+  const stmt = db.prepare(
+    'SELECT * FROM order_results ORDER BY id DESC, created_at DESC LIMIT ?'
+  );
+  stmt.bind([limit || 1]);
+  const rows = [];
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    rows.push({
+      ...row,
+      orders: row.orders_json ? JSON.parse(row.orders_json) : []
+    });
+  }
+  stmt.free();
+  return rows;
+};
+
+const saveOrderResults = async (payload = {}) => {
+  const { db } = await ensureDb();
+  const ordersJson = JSON.stringify(Array.isArray(payload.orders) ? payload.orders : []);
+  // Keep only the most recent search; clear previous rows before insert
+  db.run('DELETE FROM order_results;');
+  const stmt = db.prepare(
+    'INSERT INTO order_results (label, search_query, orders_json) VALUES (?, ?, ?)'
+  );
+  stmt.run([payload.label || 'Latest orders', payload.search_query || '', ordersJson]);
+  stmt.free();
+
+  const rowStmt = db.prepare(
+    'SELECT * FROM order_results ORDER BY id DESC, created_at DESC LIMIT 1'
+  );
+  let entry = null;
+  if (rowStmt.step()) {
+    const row = rowStmt.getAsObject();
+    entry = {
+      ...row,
+      orders: row.orders_json ? JSON.parse(row.orders_json) : []
+    };
+  }
+  rowStmt.free();
+  persist(db);
+  return entry;
+};
+
+const listCreatedOrders = async (limit = 1) => {
+  const { db } = await ensureDb();
+  const stmt = db.prepare(
+    'SELECT * FROM created_orders ORDER BY id DESC, created_at DESC LIMIT ?'
+  );
+  stmt.bind([limit || 1]);
+  const rows = [];
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    rows.push({
+      ...row,
+      orders: row.orders_json ? JSON.parse(row.orders_json) : []
+    });
+  }
+  stmt.free();
+  return rows;
+};
+
+const saveCreatedOrders = async (payload = {}) => {
+  const { db } = await ensureDb();
+  const ordersJson = JSON.stringify(Array.isArray(payload.orders) ? payload.orders : []);
+  // Only keep the latest snapshot of created orders
+  db.run('DELETE FROM created_orders;');
+  const stmt = db.prepare(
+    'INSERT INTO created_orders (label, orders_json) VALUES (?, ?)'
+  );
+  stmt.run([payload.label || 'Recently created', ordersJson]);
+  stmt.free();
+
+  const rowStmt = db.prepare(
+    'SELECT * FROM created_orders ORDER BY id DESC, created_at DESC LIMIT 1'
+  );
+  let entry = null;
+  if (rowStmt.step()) {
+    const row = rowStmt.getAsObject();
+    entry = {
+      ...row,
+      orders: row.orders_json ? JSON.parse(row.orders_json) : []
+    };
+  }
+  rowStmt.free();
+  persist(db);
+  return entry;
+};
+
 module.exports = {
   listAutomations,
-  saveAutomation
+  saveAutomation,
+  listOrderResults,
+  saveOrderResults,
+  listCreatedOrders,
+  saveCreatedOrders
 };

@@ -1174,6 +1174,39 @@ function App() {
     loadAutomations();
   }, []);
 
+  useEffect(() => {
+    const loadCachedOrders = async () => {
+      if (!window.electronAPI?.ordersCacheList) return;
+      try {
+        const rows = (await window.electronAPI.ordersCacheList(1)) || [];
+        const latest = rows[0];
+        if (latest && Array.isArray(latest.orders) && latest.orders.length) {
+          setOrders(latest.orders);
+          setHasQueriedOrders(true);
+        }
+      } catch (error) {
+        console.error('[orders] Failed to load cached orders', error);
+      }
+    };
+    loadCachedOrders();
+  }, []);
+
+  useEffect(() => {
+    const loadCreatedOrders = async () => {
+      if (!window.electronAPI?.ordersCreatedList) return;
+      try {
+        const rows = (await window.electronAPI.ordersCreatedList(1)) || [];
+        const latest = rows[0];
+        if (latest && Array.isArray(latest.orders) && latest.orders.length) {
+          setCreatedOrders(latest.orders);
+        }
+      } catch (error) {
+        console.error('[orders] Failed to load created orders cache', error);
+      }
+    };
+    loadCreatedOrders();
+  }, []);
+
   const addLog = async ({ count, label, details, ordersSnapshot }) => {
     const entry = {
       time: new Date(),
@@ -1529,7 +1562,26 @@ function App() {
         });
       }
 
-      setOrders(loaded);
+      let finalOrders = loaded;
+      if (window.electronAPI?.ordersCacheSave && window.electronAPI?.ordersCacheList) {
+        try {
+          const label = lastQueryLabel || (nlQuery && nlQuery.trim()) || 'Orders search';
+          await window.electronAPI.ordersCacheSave({
+            label,
+            search_query: label,
+            orders: loaded
+          });
+          const savedRows = (await window.electronAPI.ordersCacheList(1)) || [];
+          const latest = savedRows[0];
+          if (latest && Array.isArray(latest.orders)) {
+            finalOrders = latest.orders;
+          }
+        } catch (persistError) {
+          console.error('[orders] cache persist failed:', persistError);
+        }
+      }
+
+      setOrders(finalOrders);
       setSelectedOrder(null);
       setStatus('Ready');
     } catch (error) {
@@ -1607,7 +1659,17 @@ function App() {
       console.log('[orders] create_order result:', result);
       if (result.order) {
         const { id, name, total_price, currency } = result.order;
-        setCreatedOrders((prev) => [result.order, ...prev]);
+        setCreatedOrders((prev) => {
+          const next = [result.order, ...prev];
+          // Persist latest created orders snapshot
+          if (window.electronAPI?.ordersCreatedSave) {
+            window.electronAPI.ordersCreatedSave({
+              label: 'Recently created',
+              orders: next
+            }).catch((err) => console.error('[orders] persist created orders failed:', err));
+          }
+          return next;
+        });
         setSelectedOrder(result.order);
         setChatMessages((prev) => [
           ...prev,

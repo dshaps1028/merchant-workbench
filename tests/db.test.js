@@ -63,4 +63,75 @@ describe('automations db (sql.js)', () => {
     expect(target.next_run).toBeNull();
   });
 
+  test('saves order search results and returns latest row', async () => {
+    const sampleOrders = [
+      { id: 10, name: 'Order #10', email: 'a@example.com' },
+      { id: 11, name: 'Order #11', email: 'b@example.com' }
+    ];
+    const saved = await db.saveOrderResults({
+      label: 'Last search',
+      search_query: 'pending orders',
+      orders: sampleOrders
+    });
+    expect(saved).toMatchObject({
+      label: 'Last search',
+      search_query: 'pending orders'
+    });
+    expect(saved.orders).toEqual(sampleOrders);
+
+    const rows = await db.listOrderResults(3);
+    expect(rows.length).toBe(1);
+    expect(rows[0].orders).toEqual(sampleOrders);
+  });
+
+  test('defaults orders_json to empty array when saving without orders', async () => {
+    await db.saveOrderResults({
+      label: 'Empty search',
+      search_query: 'none',
+      orders: null
+    });
+    const rows = await db.listOrderResults(1);
+    expect(rows[0].orders).toEqual([]);
+  });
+
+  test('overwrites previous order search rows with the latest search', async () => {
+    await db.saveOrderResults({
+      label: 'First',
+      search_query: 'first search',
+      orders: [{ id: 1, name: 'Order #1' }]
+    });
+    await db.saveOrderResults({
+      label: 'Second',
+      search_query: 'second search',
+      orders: [{ id: 2, name: 'Order #2' }]
+    });
+    const rows = await db.listOrderResults(5);
+    expect(rows.length).toBe(1);
+    expect(rows[0]).toMatchObject({
+      label: 'Second',
+      search_query: 'second search'
+    });
+    expect(rows[0].orders).toEqual([{ id: 2, name: 'Order #2' }]);
+  });
+
+  test('saves created orders snapshot and overwrites previous snapshot', async () => {
+    await db.saveCreatedOrders({
+      label: 'First batch',
+      orders: [{ id: 5, name: 'Order #5' }]
+    });
+    await db.saveCreatedOrders({
+      label: 'Second batch',
+      orders: [
+        { id: 6, name: 'Order #6' },
+        { id: 7, name: 'Order #7' }
+      ]
+    });
+    const rows = await db.listCreatedOrders(3);
+    expect(rows.length).toBe(1);
+    expect(rows[0]).toMatchObject({ label: 'Second batch' });
+    expect(rows[0].orders).toEqual([
+      { id: 6, name: 'Order #6' },
+      { id: 7, name: 'Order #7' }
+    ]);
+  });
 });
