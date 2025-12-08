@@ -56,6 +56,17 @@ describe('utils date helpers', () => {
     expect(min.getFullYear()).toBe(2025);
     expect(max.getFullYear()).toBe(2025);
   });
+
+  test('deriveDateRangeFromQuery handles past week phrases', () => {
+    freeze('2025-10-15T12:00:00Z');
+    const { created_at_min, created_at_max } = deriveDateRangeFromQuery('orders from the past week');
+    const min = new Date(created_at_min);
+    const max = new Date(created_at_max);
+    // Range should cover roughly 7 days
+    const days = Math.round((max - min) / (24 * 60 * 60 * 1000));
+    expect(days).toBeGreaterThanOrEqual(6);
+    expect(days).toBeLessThanOrEqual(8);
+  });
 });
 
 describe('utils text parsing', () => {
@@ -69,9 +80,21 @@ describe('utils text parsing', () => {
     expect(tags).toEqual([]);
   });
 
+  test('parseTagList handles multiple quoted tags', () => {
+    const tags = parseTagList('apply tags "holiday_sale" "vip_cust" and promo');
+    expect(tags).toEqual(expect.arrayContaining(['holiday_sale', 'vip_cust', 'promo']));
+  });
+
   test('fuzzyNormalizeQuery normalizes close matches', () => {
     const { normalized, warning } = fuzzyNormalizeQuery('yesterdy');
     expect(normalized).toBe('yesterday');
     expect(warning).toMatch(/Interpreted "yesterdy" as "yesterday"/i);
+  });
+
+  test('levenshtein distance basics', () => {
+    expect(fuzzyNormalizeQuery('today').warning).toBe('');
+    // quick sanity: distance 1 case gets normalized when in vocab
+    const { normalized } = fuzzyNormalizeQuery('tday');
+    expect(normalized.includes('today')).toBe(true);
   });
 });

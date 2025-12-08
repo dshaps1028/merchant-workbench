@@ -59,5 +59,8 @@ describe('automations db (sql.js)', () => {
     const target = rows.find((r) => r.label === 'One-off' && r.schedule === 'once');
     expect(target).toBeTruthy();
     expect(target.orders_snapshot).toEqual([]);
+    expect(target.last_run).toBeNull();
+    expect(target.next_run).toBeNull();
   });
+
 });
