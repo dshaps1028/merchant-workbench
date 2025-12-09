@@ -1772,6 +1772,7 @@ function App() {
       setAiAnalysisError('Codex analysis is not available in this build.');
       return;
     }
+    const userPrompt = lastQueryLabel || nlQuery || 'Order search';
     setAiAnalysisLoading(true);
     setAiAnalysisError('');
     try {
@@ -1793,12 +1794,38 @@ function App() {
             }))
           : []
       }));
-      const promptText = lastQueryLabel || nlQuery || 'Order search';
+      const promptText = `${userPrompt}\n\nPlease respond with a concise, conversational summary (2-4 sentences) of notable patterns or anomalies. Avoid bullet points; use plain English.`;
       console.log('[ai-search] sending to Codex (redacted):', JSON.stringify(limited, null, 2));
       const res = await window.electronAPI.codexAnalyzeOrders(promptText, limited);
       if (res?.ok) {
         console.log('[ai-search] Codex analysis response:', res.analysis);
-        setAiAnalysis(res.analysis || '');
+        const cleanAnalysisText = (text) => {
+          if (!text) return '';
+          if (typeof text === 'string') {
+            const trimmed = text.trim();
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (parsed && typeof parsed.analysis === 'string') {
+                return parsed.analysis;
+              }
+            } catch (e) {
+              // not JSON, proceed
+            }
+            if (
+              (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+              (trimmed.startsWith("'") && trimmed.endsWith("'"))
+            ) {
+              return trimmed.slice(1, -1);
+            }
+            return trimmed;
+          }
+          if (text && typeof text.analysis === 'string') {
+            return text.analysis;
+          }
+          return String(text);
+        };
+        const sanitized = cleanAnalysisText(res.analysis);
+        setAiAnalysis(sanitized);
         setAiAnalysisError('');
       } else {
         console.error('[ai-search] Codex analysis error:', res);
@@ -1923,6 +1950,41 @@ function App() {
     } finally {
       setSchedulerProcessing(false);
     }
+  };
+
+  const renderAiAnalysisContent = () => {
+    if (!aiAnalysis) return null;
+    const lines = aiAnalysis
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const allBullets = lines.every((l) => l.startsWith('- '));
+
+    const containerStyle = {
+      background: 'rgba(255,255,255,0.06)',
+      border: '1px solid rgba(255,255,255,0.1)',
+      borderRadius: '10px',
+      padding: '12px',
+      color: '#fff',
+      fontSize: '13px',
+      lineHeight: '1.6'
+    };
+
+    if (allBullets) {
+      return h(
+        'div',
+        { style: containerStyle },
+        h(
+          'ul',
+          { style: { paddingLeft: '18px', margin: 0 } },
+          lines.map((l, idx) =>
+            h('li', { key: `ai-line-${idx}` }, l.replace(/^- /, '').trim())
+          )
+        )
+      );
+    }
+
+    return h('div', { style: { ...containerStyle, whiteSpace: 'pre-wrap' } }, aiAnalysis);
   };
 
   const handleProductSearch = async (overrideQuery) => {
@@ -2795,22 +2857,7 @@ function App() {
               ? h('p', { className: 'order-sub' }, 'Analyzing results…')
               : aiAnalysisError
                 ? h('p', { className: 'order-sub' }, aiAnalysisError)
-                : h(
-                    'div',
-                    {
-                      style: {
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '10px',
-                        padding: '12px',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: '1.5',
-                        color: '#fff',
-                        fontSize: '13px'
-                      }
-                    },
-                    aiAnalysis
-                  )
+                : renderAiAnalysisContent()
           )
         : null,
       hasQueriedOrders && orders.length > 0 && !ordersLoading && !nlProcessing
