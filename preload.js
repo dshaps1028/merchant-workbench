@@ -199,6 +199,74 @@ const codexAnalyzeOrders = async (prompt, orders = []) => {
   }
 };
 
+const codexReport = async (prompt, orders = [], mode = 'trends') => {
+  if (codexInitError) {
+    return { ok: false, error: codexInitError };
+  }
+  const normalizedMode = ['csv', 'top', 'trends'].includes(mode) ? mode : 'trends';
+  const thread = await getCodexThread();
+  let schema;
+  let system;
+  if (normalizedMode === 'csv') {
+    schema = {
+      type: 'object',
+      properties: { csv: { type: 'string' } },
+      required: ['csv'],
+      additionalProperties: false
+    };
+    system =
+      'Produce a CSV string with a header row. Each row should represent an order line item: columns id,name,total_price,currency,financial_status,fulfillment_status,created_at,tag_list,item_title,item_sku,item_qty. ' +
+      'Do not include personally identifiable information. Keep the CSV under ~200 lines. If no orders, return a CSV header only.';
+  } else if (normalizedMode === 'top') {
+    schema = {
+      type: 'object',
+      properties: {
+        top: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', nullable: true },
+              total_price: { type: 'string', nullable: true },
+              currency: { type: 'string', nullable: true },
+              line_item_count: { type: 'integer', nullable: true }
+            },
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['top'],
+      additionalProperties: false
+    };
+    system =
+      'Return the top-performing orders based on total_price descending. Provide an array "top" of at most 10 items with name, total_price, currency, and line_item_count. No PII.';
+  } else {
+    schema = {
+      type: 'object',
+      properties: { analysis: { type: 'string' } },
+      required: ['analysis'],
+      additionalProperties: false
+    };
+    system =
+      'You are an analyst for Shopify orders. Given a user request and a redacted list of orders (id, name, totals, status, tags, line items titles/SKUs/quantities), produce a concise summary of what matches the request. ' +
+      'Return 3-5 short bullet points or sentences. If nothing matches, say so. Do not include PII. Keep it under 800 characters.';
+  }
+
+  try {
+    const turn = await thread.run(
+      [
+        { type: 'text', text: system },
+        { type: 'text', text: `User request: ${prompt}` },
+        { type: 'text', text: `Orders JSON:\n${JSON.stringify(orders)}` }
+      ],
+      { outputSchema: schema }
+    );
+    return { ok: true, mode: normalizedMode, data: turn.finalResponse };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Codex report failed' };
+  }
+};
+
 const codexOrderComposer = async (prompt, draft) => {
   if (codexInitError) {
     return { ok: false, error: codexInitError };
@@ -649,6 +717,7 @@ const api = {
   ping: () => 'ready',
   codexOrders,
   codexAnalyzeOrders,
+  codexReport,
   codexOrderComposer,
   oauthStart: (shop) => ipcRenderer.invoke('oauth:start', shop),
   oauthList: () => ipcRenderer.invoke('oauth:list'),

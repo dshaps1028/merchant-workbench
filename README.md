@@ -91,10 +91,10 @@ Automations are persisted locally in a SQLite file (via `sql.js`, stored as `aut
 - You can clear all automations during development by deleting rows from `automations.sqlite` (e.g., `DELETE FROM automations;`), as demonstrated in the tests.
 
 ## Ask ShopifAI (AI Insights)
-- Use the “Ask ShopifAI” button (next to “Edit Orders”) after running a search to send a redacted snapshot of up to 25 returned orders to Codex.
+- Use the “Ask ShopifAI” button (next to “Edit Orders”) after running a search to send a redacted snapshot of the most recent orders to Codex. If you just refreshed, the UI pulls your last saved search from the local cache automatically.
+- A separate “Open Insights Chat” lets you ask for trends, top performers, or a CSV export. CSVs include `created_at` and honor natural-language hints like “top 5 most expensive” or “created_at descending.” A “Download last CSV” button saves the latest CSV locally without extra backend calls.
 - We redact sensitive fields and only send: `id, name, total_price, currency, created_at, tags, financial_status, fulfillment_status, line_items (title, variant_title, sku, quantity)`.
-- The prompt asks Codex for a short conversational summary (no bullets). The response is displayed inline in the “AI Insights” panel.
-- Logging: prompts/responses are logged in the console (`[ai-search]`), and failures show an error in the panel.
+- The prompt asks Codex for a short conversational summary (no bullets). The response is displayed inline in the “AI Insights” panel. Errors are shown in-panel and logged with `[ai-search]`/`[codex]`.
 
 ## Search Date Parsing & Typo Tolerance
 The order search bar accepts natural language date phrases: explicit dates (`2025-09-12`), month ranges (`September 2025`), relative ranges (`yesterday`, `last week`, `past month`, `last year`), and weekdays (`last Sunday`). A lightweight fuzzy pass (Levenshtein distance ≤ 2 against known date terms) normalizes minor misspellings (e.g., “yesterdy” → “yesterday”). When a fuzzy correction is applied, a warning string is returned alongside the derived date range so the UI can surface it if desired. Date ranges are derived using the shop’s timezone (when available) and are no longer auto-widened; zero results stay zero instead of silently broadening the query.
@@ -122,6 +122,7 @@ Unit tests are powered by Jest and live under `tests/`. Current coverage:
 - Automations DB (sql.js): persistence of automations, JSON snapshots, and scheduling fields (`last_run`, `next_run`).
 - Auth helpers: keytar-backed credential storage and active shop tracking.
 - MCP handlers: order create/update payload shaping and responses, using mocked Shopify calls.
+- Insights helpers: CSV intent parsing (limits/sorting) and CSV building (includes `created_at` header).
 
 Run the suite:
 ```bash

@@ -816,6 +816,164 @@ const LogList = ({ entries, onSelect, onDelete }) =>
     )
   );
 
+const InsightsModal = ({
+  open,
+  onClose,
+  messages,
+  onSendMessage,
+  inputValue,
+  onInputChange,
+  submitting,
+  messagesEndRef,
+  onDownloadCsv
+}) => {
+  if (!open) return null;
+  return h(
+    'div',
+    {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(6px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      },
+      onClick: onClose
+    },
+    h(
+      'div',
+      {
+        style: {
+          background: 'rgba(255,255,255,0.12)',
+          color: '#e8f4ec',
+          borderRadius: '6px',
+          padding: '20px',
+          width: 'min(700px, 90vw)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 18px 38px rgba(0,0,0,0.4)',
+          position: 'relative',
+          maxHeight: '70vh',
+          display: 'flex',
+          flexDirection: 'column'
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      h(
+        'div',
+        { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+        h('h3', null, 'ShopifAI Insights'),
+        h(
+          'button',
+          {
+            onClick: onClose,
+            style: {
+              background: '#000',
+              borderRadius: '6px',
+              width: '28px',
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#e8f4ec',
+              border: '1px solid rgba(255,255,255,0.25)',
+              cursor: 'pointer'
+            }
+          },
+          '×'
+        )
+      ),
+      h(
+        'div',
+        {
+          style: {
+            marginTop: '12px',
+            padding: '12px',
+            background: 'rgba(0,0,0,0.35)',
+            borderRadius: '6px',
+            border: '1px solid rgba(255,255,255,0.15)',
+            flex: '1 1 auto',
+            overflowY: 'auto'
+          }
+        },
+        messages.map((m, idx) =>
+          h(
+            'div',
+            {
+              key: idx,
+              className: m.role === 'assistant' ? 'assistant-message' : 'user-message',
+              style: { marginBottom: '10px' }
+            },
+            h(
+              'p',
+              { style: { margin: 0, whiteSpace: 'pre-wrap' } },
+              m.text
+            )
+          )
+        ),
+        h('div', { ref: messagesEndRef })
+      ),
+      h(
+        'div',
+        { style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' } },
+        onDownloadCsv
+          ? h(
+              'button',
+              {
+                onClick: onDownloadCsv,
+                style: {
+                  alignSelf: 'flex-start',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#e8f4ec',
+                  cursor: 'pointer'
+                }
+              },
+              'Download last CSV'
+            )
+          : null,
+        h('textarea', {
+          value: inputValue,
+          onChange: (e) => onInputChange(e.target.value),
+          placeholder: 'Ask for trends, a CSV export, or top performers for these orders…',
+          style: {
+            width: '100%',
+            minHeight: '70px',
+            background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '6px',
+            color: '#e8f4ec',
+            padding: '10px'
+          }
+        }),
+        h(
+          'button',
+          {
+            onClick: onSendMessage,
+            disabled: submitting,
+            style: {
+              alignSelf: 'flex-end',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              background: submitting ? 'rgba(255,255,255,0.3)' : '#000',
+              color: '#fff',
+              fontWeight: 700,
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              border: '1px solid rgba(255,255,255,0.25)'
+            }
+          },
+          submitting ? 'Working…' : 'Send'
+        )
+      )
+    )
+  );
+};
+
 const OrdersList = ({ orders, loading, error, queried, onSelect, onShowAll }) => {
   if (loading) {
     return h('p', { className: 'order-sub' }, 'Loading orders…');
@@ -1408,9 +1566,14 @@ function App() {
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const [aiAnalysisError, setAiAnalysisError] = useState('');
+  const [insightModalOpen, setInsightModalOpen] = useState(false);
+  const [insightMessages, setInsightMessages] = useState([]);
+  const [insightInput, setInsightInput] = useState('');
+  const [insightLoading, setInsightLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const editMessagesEndRef = useRef(null);
   const automationMessagesEndRef = useRef(null);
+  const insightMessagesEndRef = useRef(null);
   const [shopTimeZone, setShopTimeZone] = useState(null);
 
   useEffect(() => {
@@ -1430,6 +1593,12 @@ function App() {
       automationMessagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [automationMessages, showAutomationModal]);
+
+  useEffect(() => {
+    if (insightMessagesEndRef.current) {
+      insightMessagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [insightMessages, insightModalOpen]);
 
   useEffect(() => {
     setStatus('Ready');
@@ -2351,6 +2520,236 @@ function App() {
     }
   };
 
+  const redactedOrdersForInsights = (sourceOrders = orders, limit = 50) =>
+    (sourceOrders || []).slice(0, limit).map((o) => ({
+      id: o.id,
+      name: o.name,
+      total_price: o.total_price,
+      currency: o.currency,
+      created_at: o.created_at,
+      tags: o.tags,
+      financial_status: o.financial_status,
+      fulfillment_status: o.fulfillment_status,
+      line_items: (o.line_items || []).map((li) => ({
+        title: li.title,
+        variant_title: li.variant_title,
+        sku: li.sku,
+        quantity: li.quantity
+      }))
+    }));
+
+  const buildLocalCsv = (sourceOrders = []) => {
+    const rows = [
+      'id,name,total_price,currency,financial_status,fulfillment_status,created_at,tag_list,item_title,item_sku,item_qty'
+    ];
+    sourceOrders.forEach((o) => {
+      const tags = String(o.tags || '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .join('|');
+      const lineItems = (o.line_items || []).length ? o.line_items : [{ title: '', sku: '', quantity: '' }];
+      lineItems.forEach((li) => {
+        const cells = [
+          o.id ?? '',
+          (o.name || '').replace(/,/g, ''),
+          o.total_price ?? '',
+          o.currency ?? '',
+          o.financial_status ?? '',
+          o.fulfillment_status ?? '',
+          o.created_at ?? '',
+          tags.replace(/,/g, '|'),
+          (li.title || '').replace(/,/g, ''),
+          li.sku ?? '',
+          li.quantity ?? ''
+        ];
+        rows.push(cells.join(','));
+      });
+    });
+    return rows.join('\n');
+  };
+
+  const localTrendSummary = (payloadOrders = []) => {
+    if (!payloadOrders.length) return '';
+    const total = payloadOrders.length;
+    const revenue = payloadOrders.reduce(
+      (acc, o) => acc + (parseFloat(o.total_price) || 0),
+      0
+    );
+    const avg = total ? revenue / total : 0;
+    const tagCounts = {};
+    const itemCounts = {};
+    payloadOrders.forEach((o) => {
+      const tags = String(o.tags || '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      tags.forEach((t) => {
+        tagCounts[t] = (tagCounts[t] || 0) + 1;
+      });
+      (o.line_items || []).forEach((li) => {
+        const key = li.title || li.sku;
+        if (!key) return;
+        itemCounts[key] = (itemCounts[key] || 0) + (Number(li.quantity) || 1);
+      });
+    });
+    const topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0];
+    const topItem = Object.entries(itemCounts).sort((a, b) => b[1] - a[1])[0];
+    return [
+      `Orders analyzed: ${total}`,
+      `GMV: $${revenue.toFixed(2)}`,
+      `Avg order: $${avg.toFixed(2)}`,
+      `Top tag: ${topTag ? `${topTag[0]} (${topTag[1]})` : 'n/a'}`,
+      `Top item: ${topItem ? `${topItem[0]} (${topItem[1]})` : 'n/a'}`
+    ].join(' • ');
+  };
+
+  const detectInsightMode = (text) => {
+    const lc = (text || '').toLowerCase();
+    if (lc.includes('csv') || lc.includes('export')) return 'csv';
+    if (lc.includes('top') || lc.includes('best') || lc.includes('highest')) return 'top';
+    return 'trends';
+  };
+
+  const applyCsvIntent = (promptText, sourceOrders = []) => {
+    const lc = (promptText || '').toLowerCase();
+    let limit = null;
+    const limitMatch = lc.match(/(?:only|first|top)\s+(\d+)/);
+    if (limitMatch) {
+      limit = Number(limitMatch[1]) || null;
+    }
+    let sortKey = null;
+    let sortDir = 'desc';
+    if (lc.includes('created_at') || lc.includes('date')) {
+      sortKey = 'created_at';
+      if (lc.includes('asc') || lc.includes('oldest') || lc.includes('earliest')) {
+        sortDir = 'asc';
+      }
+    } else if (lc.includes('price') || lc.includes('total')) {
+      sortKey = 'total_price';
+      if (lc.includes('cheapest') || lc.includes('lowest') || lc.includes('asc')) {
+        sortDir = 'asc';
+      } else {
+        sortDir = 'desc';
+      }
+    } else if (lc.includes('expensive')) {
+      sortKey = 'total_price';
+      sortDir = 'desc';
+    }
+
+    let working = [...(sourceOrders || [])];
+    if (sortKey === 'created_at') {
+      working = working
+        .filter((o) => o.created_at)
+        .sort((a, b) => {
+          const da = new Date(a.created_at).getTime();
+          const db = new Date(b.created_at).getTime();
+          return sortDir === 'asc' ? da - db : db - da;
+        });
+    } else if (sortKey === 'total_price') {
+      working = working
+        .filter((o) => o.total_price !== undefined && o.total_price !== null)
+        .sort((a, b) => {
+          const pa = parseFloat(a.total_price) || 0;
+          const pb = parseFloat(b.total_price) || 0;
+          return sortDir === 'asc' ? pa - pb : pb - pa;
+        });
+    }
+
+    if (limit && limit > 0) {
+      working = working.slice(0, limit);
+    }
+    return working;
+  };
+
+  const fetchCachedOrdersForInsights = async () => {
+    if (!window.electronAPI?.ordersCacheList) return [];
+    try {
+      const rows = (await window.electronAPI.ordersCacheList(1)) || [];
+      const latest = rows[0];
+      const cached = Array.isArray(latest?.orders) ? latest.orders : [];
+      if (cached.length) {
+        setOrders(cached);
+        setHasQueriedOrders(true);
+      }
+      return cached;
+    } catch (err) {
+      console.error('[insights] Failed to load cached orders for insights', err);
+      return [];
+    }
+  };
+
+  const [lastCsv, setLastCsv] = useState('');
+
+  const handleSendInsightMessage = async () => {
+    const trimmed = (insightInput || '').trim();
+    if (!trimmed) return;
+    setInsightMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
+    setInsightInput('');
+    setInsightLoading(true);
+    try {
+      if (!window.electronAPI?.codexReport) {
+        throw new Error('Codex reporting is not available in this build.');
+      }
+      let payloadOrders = Array.isArray(orders) ? orders : [];
+      if (!payloadOrders.length) {
+        payloadOrders = await fetchCachedOrdersForInsights();
+      }
+      if (!payloadOrders.length) {
+        setInsightMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: 'Run a search first so I have orders to analyze.' }
+        ]);
+        return;
+      }
+      const mode = detectInsightMode(trimmed);
+      const maybeFilteredForCsv = mode === 'csv' ? applyCsvIntent(trimmed, payloadOrders) : payloadOrders;
+      const redacted = redactedOrdersForInsights(maybeFilteredForCsv, 50);
+      const res = await window.electronAPI.codexReport(trimmed, redacted, mode);
+      if (!res?.ok) {
+        throw new Error(res?.error || 'Codex report failed');
+      }
+      let reply = '';
+      if (mode === 'csv') {
+        reply = res.data?.csv || '';
+        if (!reply || !reply.trim()) {
+          reply = buildLocalCsv(redacted) || 'No CSV returned.';
+        }
+        if (reply && reply.trim()) {
+          setLastCsv(reply);
+        }
+      } else if (mode === 'top') {
+        const top = res.data?.top || [];
+        reply =
+          top.length === 0
+            ? 'No top orders found.'
+            : top
+                .map(
+                  (t, idx) =>
+                    `${idx + 1}. ${t.name || 'Order'} — ${t.total_price || 'N/A'} ${t.currency || ''} (${t.line_item_count || 0} items)`
+                )
+                .join('\n');
+      } else {
+        reply = res.data?.analysis || '';
+        if (!reply || !reply.trim()) {
+          reply =
+            localTrendSummary(redacted) || 'No data returned from Codex. Try re-running your search first.';
+        }
+      }
+      setInsightMessages((prev) => [...prev, { role: 'assistant', text: reply || 'No data returned.' }]);
+    } catch (error) {
+      setInsightMessages((prev) => [
+        ...prev,
+        { role: 'assistant', text: `Sorry, I hit an error: ${error?.message || 'Unknown error'}` }
+      ]);
+    } finally {
+      setInsightLoading(false);
+      if (insightMessagesEndRef.current) {
+        insightMessagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    }
+  };
+
   const handleCreateOrder = async (draftOverride) => {
     if (!requireShopConnection()) return;
     if (!window.electronAPI?.mcpCreateOrder) {
@@ -3174,6 +3573,31 @@ function App() {
                 messagesEndRef
               })
             : null,
+          insightModalOpen
+            ? h(InsightsModal, {
+                open: insightModalOpen,
+                onClose: () => setInsightModalOpen(false),
+                messages: insightMessages,
+                onSendMessage: handleSendInsightMessage,
+                inputValue: insightInput,
+                onInputChange: setInsightInput,
+                submitting: insightLoading,
+                messagesEndRef: insightMessagesEndRef,
+                onDownloadCsv: lastCsv
+                  ? () => {
+                      const blob = new Blob([lastCsv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = 'orders.csv';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+                    }
+                  : null
+              })
+            : null,
           h(
             Panel,
             {
@@ -3457,23 +3881,25 @@ function App() {
             h(
               ActionButton,
               {
-                onClick: handleAnalyzeOrders,
-                disabled: aiAnalysisLoading
+                onClick: () => {
+                  setInsightModalOpen(true);
+                  if (!insightMessages.length) {
+                    setInsightMessages([
+                      {
+                        role: 'assistant',
+                        text:
+                          'Ask me to summarize trends, export a CSV, or list top performers for these orders.'
+                      }
+                    ]);
+                  }
+                }
               },
-              aiAnalysisLoading
-                ? h(
-                    'span',
-                    null,
-                    'Asking Shopif',
-                    h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI'),
-                    '…'
-                  )
-                : h(
-                    'span',
-                    null,
-                    'Ask Shopif',
-                    h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI')
-                  )
+              h(
+                'span',
+                null,
+                'Ask Shopif',
+                h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI')
+              )
             )
           )
         : null,
