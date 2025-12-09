@@ -3881,27 +3881,6 @@ function App() {
             h(
               ActionButton,
               {
-                onClick: handleAnalyzeOrders,
-                disabled: aiAnalysisLoading
-              },
-              aiAnalysisLoading
-                ? h(
-                    'span',
-                    null,
-                    'Asking Shopif',
-                    h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI'),
-                    '…'
-                  )
-                : h(
-                    'span',
-                    null,
-                    'Ask Shopif',
-                    h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI')
-                  )
-            ),
-            h(
-              ActionButton,
-              {
                 onClick: () => {
                   setInsightModalOpen(true);
                   if (!insightMessages.length) {
@@ -3915,7 +3894,12 @@ function App() {
                   }
                 }
               },
-              'Open Insights Chat'
+              h(
+                'span',
+                null,
+                'Ask Shopif',
+                h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI')
+              )
             )
           )
         : null,
