@@ -868,52 +868,96 @@ const OrdersList = ({ orders, loading, error, queried, onSelect, onShowAll }) =>
 };
 
 const CreatedOrdersCarousel = ({ orders, onSelect }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
   if (!orders || !orders.length) return null;
+  const total = orders.length;
+  const clampIndex = (idx) => ((idx % total) + total) % total;
+  const goPrev = () => setActiveIndex((prev) => clampIndex(prev - 1));
+  const goNext = () => setActiveIndex((prev) => clampIndex(prev + 1));
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goPrev();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      goNext();
+    }
+  };
+
+  const order = orders[clampIndex(activeIndex)];
+  const card = h(
+    'div',
+    {
+      key: order.id || activeIndex,
+      className: 'order-row carousel-card',
+      style: {
+        border: '1px solid rgba(255,255,255,0.12)',
+        borderRadius: '6px',
+        padding: '14px',
+        background: 'rgba(255,255,255,0.06)',
+        cursor: onSelect ? 'pointer' : 'default',
+        minWidth: '260px'
+      },
+      onClick: () => onSelect && onSelect(order)
+    },
+    h(
+      'div',
+      { className: 'order-meta' },
+      h('p', { className: 'order-id' }, order.name || `Order #${order.id}`),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Total: ${order.total_price ? `$${order.total_price}` : '—'}`
+      ),
+      h(
+        'p',
+        { className: 'order-sub' },
+        `Date: ${order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'}`
+      )
+    )
+  );
+
   return h(
     'div',
     {
-      style: {
-        display: 'flex',
-        gap: '12px',
-        width: '100%',
-        overflowX: 'auto',
-        padding: '4px 0'
-      }
+      className: 'carousel-shell',
+      tabIndex: 0,
+      onKeyDown: handleKeyDown
     },
-    orders.map((order, idx) =>
+    [
+      h(
+        'button',
+        {
+          className: 'carousel-btn',
+          onClick: goPrev,
+          disabled: total <= 1,
+          'aria-label': 'Previous created order'
+        },
+        '‹'
+      ),
+      h('div', { className: 'carousel-window' }, card),
+      h(
+        'button',
+        {
+          className: 'carousel-btn',
+          onClick: goNext,
+          disabled: total <= 1,
+          'aria-label': 'Next created order'
+        },
+        '›'
+      ),
       h(
         'div',
-        {
-          key: order.id || idx,
-          className: 'order-row',
-          style: {
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: '6px',
-            padding: '12px',
-            background: 'rgba(255,255,255,0.06)',
-            cursor: onSelect ? 'pointer' : 'default',
-            minWidth: '260px',
-            flex: '0 0 auto'
-          },
-          onClick: () => onSelect && onSelect(order)
-        },
-        h(
-          'div',
-          { className: 'order-meta' },
-          h('p', { className: 'order-id' }, order.name || `Order #${order.id}`),
-          h(
-            'p',
-            { className: 'order-sub' },
-            `Total: ${order.total_price ? `$${order.total_price}` : '—'}`
-          ),
-          h(
-            'p',
-            { className: 'order-sub' },
-            `Date: ${order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'}`
-          )
+        { className: 'carousel-dots' },
+        orders.map((_, idx) =>
+          h('span', {
+            key: `dot-${idx}`,
+            className: `carousel-dot${idx === clampIndex(activeIndex) ? ' active' : ''}`,
+            onClick: () => setActiveIndex(idx)
+          })
         )
       )
-    )
+    ]
   );
 };
 
