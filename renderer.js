@@ -2778,20 +2778,6 @@ function App() {
           style: { flex: '1 1 240px' }
         }),
         h(
-          React.Fragment,
-          null,
-          hasQueriedOrders && !ordersLoading && Array.isArray(orders) && orders.length
-            ? h(
-                ActionButton,
-                {
-                  onClick: handleAnalyzeOrders,
-                  disabled: aiAnalysisLoading || nlProcessing
-                },
-                aiAnalysisLoading ? 'Analyzing…' : 'Analyze with AI'
-              )
-            : null
-        ),
-        h(
           ActionButton,
           {
             onClick: handleCodexOrders,
@@ -2834,7 +2820,9 @@ function App() {
               style: {
                 display: 'flex',
                 justifyContent: 'flex-start',
-                marginBottom: '12px'
+                marginBottom: '12px',
+                gap: '8px',
+                flexWrap: 'wrap'
               }
             },
             h(
@@ -2846,6 +2834,14 @@ function App() {
                 }
               },
               orders.length === 1 ? 'Edit Order' : 'Edit Orders'
+            ),
+            h(
+              ActionButton,
+              {
+                onClick: handleAnalyzeOrders,
+                disabled: aiAnalysisLoading
+              },
+              aiAnalysisLoading ? 'Analyzing…' : 'Analyze with AI'
             )
           )
         : null,
