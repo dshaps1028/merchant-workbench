@@ -552,6 +552,7 @@ const saveOrdersResult = (payload) => ipcRenderer.invoke('orders:saveResult', pa
 const listSavedOrders = (limit = 1) => ipcRenderer.invoke('orders:list', limit);
 const saveCreatedOrders = (payload) => ipcRenderer.invoke('ordersCreated:save', payload);
 const listCreatedOrders = (limit = 1) => ipcRenderer.invoke('ordersCreated:list', limit);
+const deleteAutomation = (id) => ipcRenderer.invoke('automations:delete', id);
 
 const openaiFunctionExecutors = {
   list_orders: mcpListOrders,
@@ -659,6 +660,7 @@ const api = {
   automationsList: () => ipcRenderer.invoke('automations:list'),
   automationsSave: (payload) => ipcRenderer.invoke('automations:save', payload),
   automationsUpdate: (payload) => ipcRenderer.invoke('automations:update', payload),
+  automationsDelete: deleteAutomation,
   onAutomationRun,
   ordersCacheSave: saveOrdersResult,
   ordersCacheList: listSavedOrders,

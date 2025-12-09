@@ -14,6 +14,7 @@ const {
   listAutomations,
   saveAutomation,
   updateAutomation,
+  deleteAutomation,
   listOrderResults,
   saveOrderResults,
   listCreatedOrders,
@@ -60,6 +61,7 @@ const registerIpcHandlers = () => {
   ipcMain.handle('automations:list', async () => listAutomations());
   ipcMain.handle('automations:save', async (_event, payload) => saveAutomation(payload || {}));
   ipcMain.handle('automations:update', async (_event, payload) => updateAutomation(payload || {}));
+  ipcMain.handle('automations:delete', async (_event, id) => deleteAutomation(id));
   ipcMain.handle('orders:list', async (_event, limit = 1) => listOrderResults(limit || 1));
   ipcMain.handle('orders:saveResult', async (_event, payload) => saveOrderResults(payload || {}));
   ipcMain.handle('ordersCreated:list', async (_event, limit = 1) => listCreatedOrders(limit || 1));

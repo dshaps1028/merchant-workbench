@@ -176,6 +176,28 @@ const updateAutomation = async (payload = {}) => {
   return payload.id;
 };
 
+const deleteAutomation = async (id) => {
+  if (!id) {
+    throw new Error('deleteAutomation requires an id');
+  }
+  const { db } = await ensureDb();
+  const stmt = db.prepare('DELETE FROM automations WHERE id = ?');
+  stmt.run([id]);
+  stmt.free();
+  persist(db);
+  let deleted = 0;
+  try {
+    const res = db.exec('SELECT changes() AS count;');
+    const row = res?.[0]?.values?.[0];
+    if (row && row.length) {
+      deleted = Number(row[0]) || 0;
+    }
+  } catch (e) {
+    deleted = 0;
+  }
+  return { ok: true, deleted };
+};
+
 const listOrderResults = async (limit = 1) => {
   const { db } = await ensureDb();
   const stmt = db.prepare(
@@ -270,6 +292,7 @@ module.exports = {
   listAutomations,
   saveAutomation,
   updateAutomation,
+  deleteAutomation,
   listOrderResults,
   saveOrderResults,
   listCreatedOrders,

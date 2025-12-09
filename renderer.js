@@ -768,7 +768,7 @@ const AutomationModal = ({
   );
 };
 
-const LogList = ({ entries, onSelect }) =>
+const LogList = ({ entries, onSelect, onDelete }) =>
   h(
     'ul',
     { className: 'logs' },
@@ -790,7 +790,28 @@ const LogList = ({ entries, onSelect }) =>
             { className: 'order-sub' },
             `${entry.time.toLocaleTimeString()} • ${entry.count} record${entry.count === 1 ? '' : 's'}`
           )
-        )
+        ),
+        onDelete && entry.id
+          ? h(
+              'button',
+              {
+                onClick: (e) => {
+                  e.stopPropagation();
+                  onDelete(entry.id);
+                },
+                style: {
+                  marginLeft: 'auto',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  cursor: 'pointer'
+                }
+              },
+              'Remove'
+            )
+          : null
       )
     )
   );
@@ -1462,6 +1483,7 @@ function App() {
         const items = (await window.electronAPI.automationsList()) || [];
         setLogs(
           items.map((row) => ({
+            id: row.id,
             time: new Date(row.created_at || Date.now()),
             count: row.orders_snapshot ? (Array.isArray(row.orders_snapshot) ? row.orders_snapshot.length : 0) : 0,
             label: row.label || 'Automation',
@@ -1512,27 +1534,48 @@ function App() {
   }, []);
 
   const addLog = async ({ count, label, details, ordersSnapshot }) => {
-    const entry = {
-      time: new Date(),
-      count,
-      label: label || 'Saved query',
-      details,
-      ordersSnapshot: ordersSnapshot || []
+    const payload = {
+      label: label || 'Automation',
+      schedule: details?.split('\n').find((l) => l.toLowerCase().startsWith('schedule:')) || '',
+      action: details?.split('\n').find((l) => l.toLowerCase().startsWith('action:')) || '',
+      search_query: lastQueryLabel || '',
+      orders_snapshot: ordersSnapshot || []
     };
-    setLogs((prev) => [...prev, entry]);
+
+    let entry = null;
     if (window.electronAPI?.automationsSave) {
       try {
-        await window.electronAPI.automationsSave({
-          label: label || 'Automation',
-          schedule: details?.split('\n').find((l) => l.toLowerCase().startsWith('schedule:')) || '',
-          action: details?.split('\n').find((l) => l.toLowerCase().startsWith('action:')) || '',
-          search_query: lastQueryLabel || '',
-          orders_snapshot: ordersSnapshot || []
-        });
+        const saved = await window.electronAPI.automationsSave(payload);
+        if (saved && saved.id) {
+          entry = {
+            id: saved.id,
+            time: new Date(saved.created_at || Date.now()),
+            count:
+              saved.orders_snapshot && Array.isArray(saved.orders_snapshot)
+                ? saved.orders_snapshot.length
+                : count,
+            label: saved.label || payload.label || 'Automation',
+            details: details || `Schedule: ${payload.schedule}\nAction: ${payload.action}`,
+            ordersSnapshot: saved.orders_snapshot || payload.orders_snapshot || []
+          };
+        }
       } catch (error) {
         console.error('Failed to persist automation', error);
       }
     }
+
+    if (!entry) {
+      entry = {
+        id: Date.now(),
+        time: new Date(),
+        count,
+        label: label || 'Saved query',
+        details,
+        ordersSnapshot: ordersSnapshot || []
+      };
+    }
+
+    setLogs((prev) => [...prev, entry]);
   };
 
   const endOfMonth = (date) => {
@@ -2160,6 +2203,68 @@ function App() {
     setSchedulerProcessing(false);
     setStatus('Ready');
     setShowScheduleModal(true);
+  };
+
+  const handleDeleteAutomation = async (id) => {
+    if (!id) return;
+    // Optimistically drop from local list for responsiveness.
+    setLogs((prev) => prev.filter((entry) => entry.id !== id));
+    if (selectedAutomation && selectedAutomation.id === id) {
+      setSelectedAutomation(null);
+    }
+    try {
+      if (window.electronAPI?.automationsDelete) {
+        const res = await window.electronAPI.automationsDelete(Number(id));
+        if (!res || res.deleted === 0) {
+          console.warn('[automations] Delete returned zero changes for id', id);
+        }
+      }
+      if (window.electronAPI?.automationsList) {
+        const items = (await window.electronAPI.automationsList()) || [];
+        setLogs(
+          items.map((row) => ({
+            id: row.id,
+            time: new Date(row.created_at || Date.now()),
+            count: row.orders_snapshot
+              ? Array.isArray(row.orders_snapshot)
+                ? row.orders_snapshot.length
+                : 0
+              : 0,
+            label: row.label || 'Automation',
+            details: `Schedule: ${row.schedule || ''}\nAction: ${row.action || ''}`,
+            ordersSnapshot: row.orders_snapshot || [],
+            next_run: row.next_run || null,
+            last_run: row.last_run || null
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('[automations] Failed to delete automation', error);
+      // Re-sync list if the delete failed
+      if (window.electronAPI?.automationsList) {
+        try {
+          const items = (await window.electronAPI.automationsList()) || [];
+          setLogs(
+            items.map((row) => ({
+              id: row.id,
+              time: new Date(row.created_at || Date.now()),
+              count: row.orders_snapshot
+                ? Array.isArray(row.orders_snapshot)
+                  ? row.orders_snapshot.length
+                  : 0
+                : 0,
+              label: row.label || 'Automation',
+              details: `Schedule: ${row.schedule || ''}\nAction: ${row.action || ''}`,
+              ordersSnapshot: row.orders_snapshot || [],
+              next_run: row.next_run || null,
+              last_run: row.last_run || null
+            }))
+          );
+        } catch (err) {
+          console.error('[automations] Failed to refresh after delete failure', err);
+        }
+      }
+    }
   };
 
   const handleShowAllOrders = async () => {
@@ -3009,7 +3114,7 @@ function App() {
           Main,
           null,
           logs.length
-            ? h('div', { id: 'log-panel' }, h(LogList, { entries: logs, onSelect: setSelectedAutomation }))
+            ? h('div', { id: 'log-panel' }, h(LogList, { entries: logs, onSelect: setSelectedAutomation, onDelete: handleDeleteAutomation }))
             : null,
           selectedAutomation
             ? h(AutomationModalDetail, {
