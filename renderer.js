@@ -2809,7 +2809,22 @@ function App() {
               ? h('p', { className: 'order-sub' }, 'Analyzing results…')
               : aiAnalysisError
                 ? h('p', { className: 'order-sub' }, aiAnalysisError)
-                : h('p', { className: 'order-sub', style: { whiteSpace: 'pre-wrap' } }, aiAnalysis)
+                : h(
+                    'div',
+                    {
+                      style: {
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '10px',
+                        padding: '12px',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.5',
+                        color: '#fff',
+                        fontSize: '13px'
+                      }
+                    },
+                    aiAnalysis
+                  )
           )
         : null,
       hasQueriedOrders && orders.length > 0 && !ordersLoading && !nlProcessing
