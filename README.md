@@ -66,7 +66,7 @@ The Electron app connects to this MCP server over stdio by default.
 - Added an `update_order` tool to edit tags, notes, and contact fields for existing orders (used by the bulk/single edit flows).
 - Expanded `list_orders` filtering to support status, fulfillment state, created-at bounds, email, order ID, order number/name, and customer name.
 
-## Authentication (private app tokens)
+## Authentication (Private App Tokens)
 This build uses Shopify private app tokens (no OAuth redirect) because private apps don’t support redirect URLs. To connect:
 1) In your Shopify admin: Settings → Apps and sales channels → Develop apps → create/open your custom app.
 2) Grant the scopes you need (e.g., read/write orders) and allow required permissions.
@@ -78,16 +78,16 @@ This build uses Shopify private app tokens (no OAuth redirect) because private a
 ## State Management & Storage
 Automations are persisted locally in a SQLite file (via `sql.js`, stored as `automations.sqlite` in the project directory). The schema includes: `id`, `label`, `schedule`, `action`, `search_query`, `orders_snapshot` (JSON string), `created_at`, `last_run`, `next_run`, `start_at`, `end_at`, `enabled`, `interval_days`. No external DB service is required. Order search and created-order snapshots are also stored locally for “recent” views.
 
-### Automation scheduler
+### Automation Scheduler
 - A lightweight scheduler loop runs in `main.js` (~60s tick). It loads enabled automations, checks `next_run <= now` (and that `end_at` has not passed), then notifies the renderer via `automation:run`.
 - The renderer re-runs the saved search (via Codex + MCP) and applies the saved action (currently tag edits) to the returned orders. It falls back to the stored `orders_snapshot` if the search fails.
 - After each run, `last_run` and `next_run` are updated (using `interval_days`); if `end_at` is in the past, the automation is disabled.
 - You can clear all automations during development by deleting rows from `automations.sqlite` (e.g., `DELETE FROM automations;`), as demonstrated in the tests.
 
-## Search date parsing & typo tolerance
+## Search Date Parsing & Typo Tolerance
 The order search bar accepts natural language date phrases: explicit dates (`2025-09-12`), month ranges (`September 2025`), relative ranges (`yesterday`, `last week`, `past month`, `last year`), and weekdays (`last Sunday`). A lightweight fuzzy pass (Levenshtein distance ≤ 2 against known date terms) normalizes minor misspellings (e.g., “yesterdy” → “yesterday”). When a fuzzy correction is applied, a warning string is returned alongside the derived date range so the UI can surface it if desired. This helps avoid overly broad results when users mistype date phrases.
 
-## Project structure
+## Project Structure
 - `main.js`: Electron main process that creates the browser window.
 - `preload.js`: Preload script for the renderer.
 - `renderer.js`: Renderer-side logic for the UI loaded by `index.html`.
