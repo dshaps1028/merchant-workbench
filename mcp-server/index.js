@@ -1209,6 +1209,7 @@ class ShopifyMCPServer {
 							: 'N/A'),
 				},
 			],
+			structuredContent: { order },
 		};
 	}
 

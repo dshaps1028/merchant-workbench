@@ -636,6 +636,27 @@ const mcpListProducts = async (params) => {
   }
 };
 
+const mcpGetOrder = async (params) => {
+  try {
+    await hydrateShopCredentials();
+    const { client } = await getMcpClient();
+    const result = await client.callTool({
+      name: 'get_order',
+      arguments: params
+    });
+    const order =
+      result.structuredContent?.order ||
+      (result.content || [])
+        .flatMap((item) => item.json?.order || item.text?.order || [])
+        .find(Boolean) ||
+      null;
+    return { ok: true, order };
+  } catch (error) {
+    console.error('[preload] MCP get_order failed:', error);
+    return { ok: false, error: error?.message || 'MCP get_order failed' };
+  }
+};
+
 const mcpGetShopInfo = async () => {
   try {
     await hydrateShopCredentials();
@@ -665,6 +686,7 @@ const openaiFunctionExecutors = {
   list_orders: mcpListOrders,
   create_order: mcpCreateOrder,
   update_order: mcpUpdateOrder,
+  get_order: mcpGetOrder,
   search_products: mcpSearchProducts,
   list_products: mcpListProducts,
   draft_order_intent: async (args) => ({ ok: true, data: args || {} })
@@ -766,6 +788,7 @@ const api = {
   oauthSetClientCreds: (id, secret) => ipcRenderer.invoke('oauth:setClientCreds', id, secret),
   oauthGetClientCreds: () => ipcRenderer.invoke('oauth:getClientCreds'),
   oauthSetToken: (shop, token) => ipcRenderer.invoke('oauth:setToken', shop, token),
+  oauthLogout: () => ipcRenderer.invoke('oauth:logout'),
   automationsList: () => ipcRenderer.invoke('automations:list'),
   automationsSave: (payload) => ipcRenderer.invoke('automations:save', payload),
   automationsUpdate: (payload) => ipcRenderer.invoke('automations:update', payload),
@@ -780,6 +803,7 @@ const api = {
   mcpListOrders,
   mcpCreateOrder,
   mcpUpdateOrder,
+  mcpGetOrder,
   mcpSearchProducts,
   mcpListProducts
 };

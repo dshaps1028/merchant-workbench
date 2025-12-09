@@ -8,7 +8,8 @@ const {
   writeActiveShop,
   setClientCreds,
   getClientCreds,
-  setShopToken
+  setShopToken,
+  clearActiveShopCredentials
 } = require('./auth');
 const {
   listAutomations,
@@ -58,6 +59,7 @@ const registerIpcHandlers = () => {
   });
   ipcMain.handle('oauth:getClientCreds', async () => getClientCreds());
   ipcMain.handle('oauth:setToken', async (_event, shop, token) => setShopToken(shop, token));
+  ipcMain.handle('oauth:logout', async () => clearActiveShopCredentials());
   ipcMain.handle('automations:list', async () => listAutomations());
   ipcMain.handle('automations:save', async (_event, payload) => saveAutomation(payload || {}));
   ipcMain.handle('automations:update', async (_event, payload) => updateAutomation(payload || {}));

@@ -46,6 +46,19 @@ const setShopToken = async (shop, token) => {
   return { shop, accessToken: token };
 };
 
+const clearActiveShopCredentials = async () => {
+  const shop = readActiveShop();
+  if (shop) {
+    try {
+      await keytar.deletePassword(SERVICE, shop);
+    } catch (err) {
+      console.warn('[auth] failed to delete token for shop', shop, err?.message);
+    }
+  }
+  writeActiveShop('');
+  return { shopCleared: shop || '', tokenCleared: !!shop };
+};
+
 const getTokenForShop = async (shop) => {
   if (!shop) return '';
   return keytar.getPassword(SERVICE, shop);
@@ -161,5 +174,6 @@ module.exports = {
   writeActiveShop,
   setClientCreds,
   getClientCreds,
-  setShopToken
+  setShopToken,
+  clearActiveShopCredentials
 };
