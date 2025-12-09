@@ -76,7 +76,13 @@ This build uses Shopify private app tokens (no OAuth redirect) because private a
 4) In the app, click “Connect Shopify” and enter the shop domain and Admin API access token. These are stored securely via keytar (OS keychain) and never exposed to end-users. Env `.env` is only a dev fallback; search/create flows require a connected shop.
 
 ## State Management & Storage
-Automations are persisted locally in a SQLite file (via `sql.js`, stored as `automations.sqlite` in the project directory). The schema includes: `id`, `label`, `schedule`, `action`, `search_query`, `orders_snapshot` (JSON string), `created_at`, `last_run`, and `next_run`. No external DB service is required.
+Automations are persisted locally in a SQLite file (via `sql.js`, stored as `automations.sqlite` in the project directory). The schema includes: `id`, `label`, `schedule`, `action`, `search_query`, `orders_snapshot` (JSON string), `created_at`, `last_run`, `next_run`, `start_at`, `end_at`, `enabled`, `interval_days`. No external DB service is required. Order search and created-order snapshots are also stored locally for “recent” views.
+
+### Automation scheduler
+- A lightweight scheduler loop runs in `main.js` (~60s tick). It loads enabled automations, checks `next_run <= now` (and that `end_at` has not passed), then notifies the renderer via `automation:run`.
+- The renderer re-runs the saved search (via Codex + MCP) and applies the saved action (currently tag edits) to the returned orders. It falls back to the stored `orders_snapshot` if the search fails.
+- After each run, `last_run` and `next_run` are updated (using `interval_days`); if `end_at` is in the past, the automation is disabled.
+- You can clear all automations during development by deleting rows from `automations.sqlite` (e.g., `DELETE FROM automations;`), as demonstrated in the tests.
 
 ## Search date parsing & typo tolerance
 The order search bar accepts natural language date phrases: explicit dates (`2025-09-12`), month ranges (`September 2025`), relative ranges (`yesterday`, `last week`, `past month`, `last year`), and weekdays (`last Sunday`). A lightweight fuzzy pass (Levenshtein distance ≤ 2 against known date terms) normalizes minor misspellings (e.g., “yesterdy” → “yesterday”). When a fuzzy correction is applied, a warning string is returned alongside the derived date range so the UI can surface it if desired. This helps avoid overly broad results when users mistype date phrases.

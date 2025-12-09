@@ -26,7 +26,11 @@ const ensureDb = async () => {
           orders_snapshot TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           last_run DATETIME,
-          next_run DATETIME
+          next_run DATETIME,
+          start_at DATETIME,
+          end_at DATETIME,
+          enabled INTEGER DEFAULT 1,
+          interval_days INTEGER DEFAULT 1
         );
       `);
       db.run(`
@@ -55,6 +59,18 @@ const ensureDb = async () => {
       if (!columns.includes('next_run')) {
         db.run(`ALTER TABLE automations ADD COLUMN next_run DATETIME;`);
       }
+      if (!columns.includes('start_at')) {
+        db.run(`ALTER TABLE automations ADD COLUMN start_at DATETIME;`);
+      }
+      if (!columns.includes('end_at')) {
+        db.run(`ALTER TABLE automations ADD COLUMN end_at DATETIME;`);
+      }
+      if (!columns.includes('enabled')) {
+        db.run(`ALTER TABLE automations ADD COLUMN enabled INTEGER DEFAULT 1;`);
+      }
+      if (!columns.includes('interval_days')) {
+        db.run(`ALTER TABLE automations ADD COLUMN interval_days INTEGER DEFAULT 1;`);
+      }
       return { db, SQL };
     })();
   }
@@ -75,7 +91,8 @@ const listAutomations = async () => {
     const row = stmt.getAsObject();
     rows.push({
       ...row,
-      orders_snapshot: row.orders_snapshot ? JSON.parse(row.orders_snapshot) : []
+      orders_snapshot: row.orders_snapshot ? JSON.parse(row.orders_snapshot) : [],
+      enabled: row.enabled === undefined ? 1 : row.enabled
     });
   }
   stmt.free();
@@ -86,7 +103,7 @@ const saveAutomation = async (payload = {}) => {
   const { db } = await ensureDb();
   const ordersJson = JSON.stringify(payload.orders_snapshot || []);
   const stmt = db.prepare(
-    'INSERT INTO automations (label, schedule, action, search_query, orders_snapshot, last_run, next_run) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO automations (label, schedule, action, search_query, orders_snapshot, last_run, next_run, start_at, end_at, enabled, interval_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   stmt.run([
     payload.label || 'Automation',
@@ -95,7 +112,11 @@ const saveAutomation = async (payload = {}) => {
     payload.search_query || '',
     ordersJson,
     payload.last_run || null,
-    payload.next_run || null
+    payload.next_run || null,
+    payload.start_at || null,
+    payload.end_at || null,
+    payload.enabled === undefined ? 1 : payload.enabled ? 1 : 0,
+    payload.interval_days !== undefined ? payload.interval_days : 1
   ]);
   stmt.free();
   const rowStmt = db.prepare(
@@ -112,6 +133,47 @@ const saveAutomation = async (payload = {}) => {
   rowStmt.free();
   persist(db);
   return entry;
+};
+
+const updateAutomation = async (payload = {}) => {
+  if (!payload.id) {
+    throw new Error('updateAutomation requires an id');
+  }
+  const { db } = await ensureDb();
+  const fields = [];
+  const values = [];
+  const allowed = [
+    'label',
+    'schedule',
+    'action',
+    'search_query',
+    'orders_snapshot',
+    'last_run',
+    'next_run',
+    'start_at',
+    'end_at',
+    'enabled',
+    'interval_days'
+  ];
+  for (const key of allowed) {
+    if (payload[key] !== undefined) {
+      fields.push(`${key} = ?`);
+      if (key === 'orders_snapshot') {
+        values.push(JSON.stringify(payload[key] || []));
+      } else if (key === 'enabled') {
+        values.push(payload[key] ? 1 : 0);
+      } else {
+        values.push(payload[key]);
+      }
+    }
+  }
+  if (!fields.length) return null;
+  values.push(payload.id);
+  const stmt = db.prepare(`UPDATE automations SET ${fields.join(', ')} WHERE id = ?`);
+  stmt.run(values);
+  stmt.free();
+  persist(db);
+  return payload.id;
 };
 
 const listOrderResults = async (limit = 1) => {
@@ -207,6 +269,7 @@ const saveCreatedOrders = async (payload = {}) => {
 module.exports = {
   listAutomations,
   saveAutomation,
+  updateAutomation,
   listOrderResults,
   saveOrderResults,
   listCreatedOrders,

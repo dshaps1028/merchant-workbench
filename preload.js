@@ -514,6 +514,23 @@ const listSavedOrders = (limit = 1) => ipcRenderer.invoke('orders:list', limit);
 const saveCreatedOrders = (payload) => ipcRenderer.invoke('ordersCreated:save', payload);
 const listCreatedOrders = (limit = 1) => ipcRenderer.invoke('ordersCreated:list', limit);
 
+const automationRunHandlers = new Set();
+ipcRenderer.on('automation:run', (_event, payload) => {
+  automationRunHandlers.forEach((fn) => {
+    try {
+      fn(payload);
+    } catch (err) {
+      console.error('[preload] automation run handler failed:', err);
+    }
+  });
+});
+
+const onAutomationRun = (handler) => {
+  if (typeof handler !== 'function') return () => {};
+  automationRunHandlers.add(handler);
+  return () => automationRunHandlers.delete(handler);
+};
+
 const api = {
   ping: () => 'ready',
   codexOrders,
@@ -528,6 +545,8 @@ const api = {
   oauthSetToken: (shop, token) => ipcRenderer.invoke('oauth:setToken', shop, token),
   automationsList: () => ipcRenderer.invoke('automations:list'),
   automationsSave: (payload) => ipcRenderer.invoke('automations:save', payload),
+  automationsUpdate: (payload) => ipcRenderer.invoke('automations:update', payload),
+  onAutomationRun,
   ordersCacheSave: saveOrdersResult,
   ordersCacheList: listSavedOrders,
   ordersCreatedSave: saveCreatedOrders,

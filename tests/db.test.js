@@ -30,7 +30,11 @@ describe('automations db (sql.js)', () => {
       search_query: 'orders from yesterday',
       orders_snapshot: [{ id: 1, name: 'Order #1' }],
       last_run: '2025-01-01T00:00:00Z',
-      next_run: '2025-01-02T00:00:00Z'
+      next_run: '2025-01-02T00:00:00Z',
+      start_at: '2025-01-01T00:00:00Z',
+      end_at: '2025-02-01T00:00:00Z',
+      enabled: 1,
+      interval_days: 1
     };
 
     const saved = await db.saveAutomation(payload);
@@ -40,9 +44,13 @@ describe('automations db (sql.js)', () => {
       action: 'apply tag',
       search_query: 'orders from yesterday',
       last_run: '2025-01-01T00:00:00Z',
-      next_run: '2025-01-02T00:00:00Z'
+      next_run: '2025-01-02T00:00:00Z',
+      start_at: '2025-01-01T00:00:00Z',
+      end_at: '2025-02-01T00:00:00Z'
     });
     expect(saved.orders_snapshot).toEqual([{ id: 1, name: 'Order #1' }]);
+    expect(saved.interval_days).toBe(1);
+    expect(saved.enabled).toBe(1);
 
     const rows = await db.listAutomations();
     expect(rows.length).toBe(1);
@@ -61,6 +69,26 @@ describe('automations db (sql.js)', () => {
     expect(target.orders_snapshot).toEqual([]);
     expect(target.last_run).toBeNull();
     expect(target.next_run).toBeNull();
+  });
+
+  test('updateAutomation toggles enabled and updates next_run', async () => {
+    const saved = await db.saveAutomation({
+      label: 'Toggle me',
+      schedule: 'daily',
+      action: 'noop',
+      interval_days: 2
+    });
+    expect(saved.enabled).toBe(1);
+    await db.updateAutomation({
+      id: saved.id,
+      enabled: 0,
+      next_run: '2025-01-10T00:00:00Z'
+    });
+    const rows = await db.listAutomations();
+    const updated = rows.find((r) => r.id === saved.id);
+    expect(updated.enabled).toBe(0);
+    expect(updated.next_run).toBe('2025-01-10T00:00:00Z');
+    expect(updated.interval_days).toBe(2);
   });
 
   test('saves order search results and returns latest row', async () => {

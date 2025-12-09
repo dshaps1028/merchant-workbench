@@ -907,6 +907,8 @@ const AutomationModalDetail = ({ entry, onClose }) => {
   const scheduleLine = lines.find((l) => l.toLowerCase().startsWith('schedule:')) || '';
   const actionLine = lines.find((l) => l.toLowerCase().startsWith('action:')) || '';
   const orders = Array.isArray(entry.ordersSnapshot) ? entry.ordersSnapshot : [];
+  const nextRunText = entry.next_run ? new Date(entry.next_run).toLocaleString() : 'Not scheduled';
+  const lastRunText = entry.last_run ? new Date(entry.last_run).toLocaleString() : 'Never';
   return h(
     'div',
     {
@@ -966,8 +968,9 @@ const AutomationModalDetail = ({ entry, onClose }) => {
       h(
         'p',
         { className: 'order-sub' },
-        `Last run: ${entry.time.toLocaleString()} • ${entry.count} record${entry.count === 1 ? '' : 's'}`
+        `Last run: ${lastRunText} • ${entry.count} record${entry.count === 1 ? '' : 's'}`
       ),
+      h('p', { className: 'order-sub' }, `Next run: ${nextRunText}`),
       !scheduleLine && !actionLine && entry.details
         ? h('p', { className: 'order-sub', style: { whiteSpace: 'pre-wrap' } }, entry.details)
         : null,
@@ -1299,7 +1302,9 @@ function App() {
             count: row.orders_snapshot ? (Array.isArray(row.orders_snapshot) ? row.orders_snapshot.length : 0) : 0,
             label: row.label || 'Automation',
             details: `Schedule: ${row.schedule || ''}\nAction: ${row.action || ''}`,
-            ordersSnapshot: row.orders_snapshot || []
+            ordersSnapshot: row.orders_snapshot || [],
+            next_run: row.next_run || null,
+            last_run: row.last_run || null
           }))
         );
       } catch (error) {
@@ -1364,6 +1369,69 @@ function App() {
         console.error('Failed to persist automation', error);
       }
     }
+  };
+
+  const endOfMonth = (date) => {
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+    return end;
+  };
+
+  const parseAutomationSchedule = (text) => {
+    const lower = text.toLowerCase();
+    const now = new Date();
+    let intervalDays = 1;
+    const dayMatch = lower.match(/every\s+(\d+)\s*day/);
+    if (dayMatch && Number(dayMatch[1])) {
+      intervalDays = Math.max(1, Number(dayMatch[1]));
+    } else if (/\bevery day\b/.test(lower) || /\bdaily\b/.test(lower)) {
+      intervalDays = 1;
+    } else if (lower.includes('week')) {
+      intervalDays = 7;
+    } else if (lower.includes('month')) {
+      intervalDays = 30;
+    }
+    const nextRun = new Date(now.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+
+    let endAt = null;
+    const nextDays = lower.match(/next\s+(\d+)\s+day/);
+    if (nextDays && Number(nextDays[1])) {
+      endAt = new Date(now.getTime() + Number(nextDays[1]) * 24 * 60 * 60 * 1000);
+    }
+    const untilDateIso = lower.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (untilDateIso) {
+      const parsed = Date.parse(untilDateIso[1]);
+      if (!Number.isNaN(parsed)) {
+        endAt = new Date(parsed);
+        endAt.setHours(23, 59, 59, 999);
+      }
+    } else if (/end of the month/.test(lower) || /until.+month/.test(lower)) {
+      endAt = endOfMonth(now);
+    }
+
+    return {
+      intervalDays,
+      startAt: now,
+      nextRun,
+      endAt
+    };
+  };
+
+  const parseAutomationTags = (actionText) => {
+    if (!actionText) return [];
+    const lower = actionText.toLowerCase();
+    const tags = [];
+    const quoted = [...actionText.matchAll(/"([^"]+)"|'([^']+)'/g)].map((m) => (m[1] || m[2] || '').trim());
+    quoted.forEach((t) => t && tags.push(t));
+    if (tags.length) return tags;
+    const addMatch = lower.match(/add\s+([a-z0-9_,\s-]+)/i);
+    if (addMatch && addMatch[1]) {
+      addMatch[1]
+        .split(/[, ]+/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .forEach((t) => tags.push(t));
+    }
+    return tags;
   };
 
   const requireShopConnection = () => {
@@ -1484,37 +1552,117 @@ function App() {
     const trimmed = text.trim();
     setAutomationMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
     setAutomationProcessing(true);
-    const lower = trimmed.toLowerCase();
-    const schedule =
-      lower.includes('daily') || lower.includes('every day')
-        ? 'Daily'
-        : lower.includes('weekly') || lower.includes('every week')
-          ? 'Weekly'
-          : lower.includes('monthly') || lower.includes('every month')
-            ? 'Monthly'
-            : lower.includes('year') || lower.includes('annual')
-              ? 'Yearly'
-              : `Custom schedule: ${trimmed}`;
+    const { intervalDays, startAt, nextRun, endAt } = parseAutomationSchedule(trimmed);
     const searchLabel = lastQueryLabel || 'Last search';
     const editLabel = lastEditDescription || 'Edit action';
-    const summary = `Automation saved: ${schedule} • ${searchLabel} • ${editLabel}`;
-    const detailText = `Schedule: ${schedule}\nSearch: ${searchLabel}\nAction: ${editLabel}`;
-    setAutomationMessages((prev) => [
+    const label = `${searchLabel} • ${editLabel}`;
+    const scheduleString = `every ${intervalDays} day(s)${
+      endAt ? ` until ${endAt.toISOString().slice(0, 10)}` : ''
+    }`;
+    const detailText = `Schedule: ${scheduleString}\nSearch: ${searchLabel}\nAction: ${editLabel}`;
+
+    const automationPayload = {
+      label,
+      schedule: scheduleString,
+      action: editLabel,
+      search_query: searchLabel,
+      orders_snapshot: editTargets.length ? editTargets : orders,
+      last_run: startAt.toISOString(),
+      next_run: nextRun.toISOString(),
+      start_at: startAt.toISOString(),
+      end_at: endAt ? endAt.toISOString() : null,
+      enabled: true,
+      interval_days: intervalDays
+    };
+
+    const successMessage = `Got it. I saved this automation: ${scheduleString}. Next run: ${nextRun.toLocaleString()}.`;
+
+    const finish = () => {
+      setAutomationMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: successMessage
+        }
+      ]);
+      setAutomationProcessing(false);
+      setAutomationInput('');
+    };
+
+    if (window.electronAPI?.automationsSave) {
+      window.electronAPI
+        .automationsSave(automationPayload)
+        .then(() => finish())
+        .catch((error) => {
+          console.error('Failed to persist automation', error);
+          setAutomationMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              text: `I tried to save the automation but hit an error: ${error?.message || 'unknown error'}.`
+            }
+          ]);
+          setAutomationProcessing(false);
+          setAutomationInput('');
+        });
+    } else {
+      finish();
+    }
+
+    setLogs((prev) => [
       ...prev,
       {
-        role: 'assistant',
-        text: `${summary}\n\n(Automations UI placeholder; stored in My Automations.)`
+        time: new Date(),
+        count: automationPayload.orders_snapshot ? automationPayload.orders_snapshot.length : 0,
+        label,
+        details: detailText,
+        ordersSnapshot: automationPayload.orders_snapshot || [],
+        next_run: automationPayload.next_run,
+        last_run: automationPayload.last_run
       }
     ]);
-    addLog({
-      count: editTargets.length || orders.length || 0,
-      label: summary,
-      details: detailText,
-      ordersSnapshot: editTargets.length ? editTargets : orders
-    });
-    setAutomationProcessing(false);
-    setAutomationInput('');
   };
+
+  // Background automation runner (triggered from main via IPC)
+  useEffect(() => {
+    if (!window.electronAPI?.onAutomationRun) return undefined;
+    const unsubscribe = window.electronAPI.onAutomationRun(async (auto) => {
+      try {
+        console.log('[automation] received automation to run:', auto);
+        let workingOrders = Array.isArray(auto.orders_snapshot) ? auto.orders_snapshot : [];
+        if (auto.search_query && window.electronAPI?.codexOrders && window.electronAPI?.mcpListOrders) {
+          try {
+            const parsed = await window.electronAPI.codexOrders(auto.search_query);
+            const params = parsed?.data || {};
+            const payload = { ...params };
+            if (!payload.status) payload.status = 'any';
+            const result = await window.electronAPI.mcpListOrders(payload);
+            if (result?.ok && Array.isArray(result.orders)) {
+              workingOrders = result.orders;
+            }
+          } catch (err) {
+            console.error('[automation] search step failed, falling back to snapshot:', err);
+          }
+        }
+
+        const tags = parseAutomationTags(auto.action);
+        if (tags.length && window.electronAPI?.mcpUpdateOrder) {
+          const tagString = tags.join(', ');
+          for (const order of workingOrders) {
+            try {
+              await window.electronAPI.mcpUpdateOrder({ order_id: order.id, tags: tagString });
+            } catch (err) {
+              console.error('[automation] failed to update order', order?.id, err);
+            }
+          }
+          console.log('[automation] applied tags to', workingOrders.length, 'orders');
+        }
+      } catch (err) {
+        console.error('[automation] run failed:', err);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   const sanitizeAddress = (addr) => {
     if (!addr || typeof addr !== 'object') return null;
@@ -2888,7 +3036,20 @@ function App() {
                 onClick: handleAnalyzeOrders,
                 disabled: aiAnalysisLoading
               },
-              aiAnalysisLoading ? 'Analyzing…' : 'Analyze with AI'
+              aiAnalysisLoading
+                ? h(
+                    'span',
+                    null,
+                    'Asking Shopif',
+                    h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI'),
+                    '…'
+                  )
+                : h(
+                    'span',
+                    null,
+                    'Ask Shopif',
+                    h('span', { style: { color: 'rgba(149,191,72,0.95)', fontWeight: 700 } }, 'AI')
+                  )
             )
           )
         : null,
