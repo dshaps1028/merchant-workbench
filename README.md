@@ -40,7 +40,7 @@ You can run the Electron shell and MCP server separately or together. Run these 
   ```bash
   npm run dev
   ```
-  This starts the MCP server over stdio in the background using the Shopify domain/token saved via the Connect Shopify flow (keytar), then launches Electron. When you’re done, stop the terminal to kill both.
+  This starts the Shopify MCP server over stdio in the background using the Shopify domain/token saved via the Connect Shopify flow (keytar), then launches Electron. Codex-as-MCP is auto-started by the app (no second terminal needed). When you’re done, stop the terminal to kill everything.
 - Start only the Electron app (connects to the MCP server over stdio):
   ```bash
   npm start
@@ -66,6 +66,19 @@ The UI currently relies on these MCP tools:
 The full tool catalog (including customer and analytics helpers) is documented in `mcp-server/TOOLS.md`.
 
 The Electron app connects to this MCP server over stdio by default.
+
+## MCP Servers Overview
+- **Shopify MCP (local)**: `mcp-server/index.js`, handles order/product tools. Started by `npm run dev` (via `scripts/start-mcp-stdio.js`) or manually with `npm run start:mcp`. Requires Shopify creds from keytar or `mcp-server/.env`.
+- **Codex MCP (bundled)**: Provided by the Codex CLI binary under `node_modules/@openai/codex-sdk/vendor/.../codex/codex`. Used for AI Insights (CSV/top/trends) via Codex-as-MCP. Auto-started by `preload.js` when Insights needs it; falls back to schema-only insights if unavailable. Requires `CODEX_API_KEY` (and optional `CODEX_MODEL` in `.env.local`). No extra install beyond `npm install` (the binary is vendored).
+
+### Manual Codex MCP start (optional for debugging)
+If you want to run it yourself, load `.env.local` then launch the bundled CLI (Apple Silicon path shown; swap `aarch64` for `x86_64` on Intel):
+```bash
+cd /Users/dshaps10/Desktop/merchant-workbench
+set -a; source .env.local; set +a
+./node_modules/@openai/codex-sdk/vendor/aarch64-apple-darwin/codex/codex mcp-server -c model="gpt-4.1"
+```
+Leave this terminal open; the Electron app will connect over stdio.
 
 ### Local Enhancements
 - Added a `create_order` tool to generate Shopify orders directly from Codex, complementing the existing order management commands.
