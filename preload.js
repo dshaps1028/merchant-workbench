@@ -6,8 +6,39 @@ const OpenAI = require('openai');
 
 let codexThreadPromise;
 let codexInitError = '';
+let codexUsingMcp = false;
+let codexMcpClientPromise;
 let mcpClientPromise;
 let openaiClient;
+
+const resolveCodexModels = () => {
+  const models = [];
+  if (process.env.CODEX_MODEL) models.push(process.env.CODEX_MODEL);
+  models.push('gpt-5.1-codex-max', 'gpt-4.1', 'gpt-4o');
+  return models;
+};
+
+const stripCodeFence = (text = '') => {
+  const trimmed = text.trim();
+  const fence = trimmed.match(/^```(?:[a-zA-Z0-9]+)?\n?([\s\S]*?)\n?```$/);
+  if (fence && fence[1]) {
+    return fence[1].trim();
+  }
+  return trimmed;
+};
+
+const resolveCodexCli = () => {
+  const vendor = path.join(__dirname, 'node_modules', '@openai', 'codex-sdk', 'vendor');
+  const archMap = {
+    arm64: 'aarch64-apple-darwin',
+    x64: 'x86_64-apple-darwin'
+  };
+  if (process.platform === 'darwin' && archMap[process.arch]) {
+    const candidate = path.join(vendor, archMap[process.arch], 'codex', 'codex');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return 'codex';
+};
 
 const loadLocalEnv = () => {
   const envPath = path.join(__dirname, '.env.local');
@@ -87,7 +118,45 @@ const getCodexThread = async () => {
       try {
         const { Codex } = await import('@openai/codex-sdk');
         const codex = new Codex();
-        return codex.startThread({ skipGitRepoCheck: true });
+        const preferredModels = resolveCodexModels();
+
+        await hydrateShopCredentials();
+        const mcpServerConfig = {
+          transport: 'stdio',
+          command: process.execPath,
+          args: [path.join(__dirname, 'mcp-server', 'index.js')],
+          cwd: path.join(__dirname, 'mcp-server'),
+          env: {
+            ELECTRON_RUN_AS_NODE: '1',
+            ...process.env
+          }
+        };
+
+        let lastErr;
+        for (const model of preferredModels) {
+          try {
+            const thread = await codex.startThread({
+              model,
+              skipGitRepoCheck: true,
+              mcpServers: [mcpServerConfig]
+            });
+            codexUsingMcp = true;
+            console.log('[preload] Codex thread started with MCP stdio', model);
+            return thread;
+          } catch (mcpErr) {
+            lastErr = mcpErr;
+            console.warn(
+              '[preload] Codex thread MCP start failed; trying next model:',
+              model,
+              mcpErr?.message || mcpErr
+            );
+          }
+        }
+        // Final fallback: no MCP
+        const fallbackModel = preferredModels[preferredModels.length - 1];
+        const thread = await codex.startThread({ model: fallbackModel, skipGitRepoCheck: true });
+        codexUsingMcp = false;
+        return thread;
       } catch (error) {
         codexInitError =
           error?.message || 'Failed to load @openai/codex-sdk (see console for details)';
@@ -98,6 +167,92 @@ const getCodexThread = async () => {
     })();
   }
   return codexThreadPromise;
+};
+
+const getCodexMcpClient = async () => {
+  if (!codexMcpClientPromise) {
+    codexMcpClientPromise = (async () => {
+      const clientModuleUrl = pathToFileURL(
+        path.join(
+          __dirname,
+          'node_modules',
+          '@modelcontextprotocol',
+          'sdk',
+          'dist',
+          'esm',
+          'client',
+          'index.js'
+        )
+      ).href;
+      const stdioModuleUrl = pathToFileURL(
+        path.join(
+          __dirname,
+          'node_modules',
+          '@modelcontextprotocol',
+          'sdk',
+          'dist',
+          'esm',
+          'client',
+          'stdio.js'
+        )
+      ).href;
+
+      const [{ Client }, { StdioClientTransport }] = await Promise.all([
+        import(clientModuleUrl),
+        import(stdioModuleUrl)
+      ]);
+
+      const transport = new StdioClientTransport({
+        command: resolveCodexCli(),
+        args: ['mcp-server'],
+        cwd: __dirname,
+        env: {
+          ...process.env
+        },
+        stderr: 'pipe'
+      });
+
+      const stderrStream = transport.stderr;
+      if (stderrStream) {
+        stderrStream.on('data', (chunk) => {
+          console.error('[preload][codex mcp stderr]', chunk.toString());
+        });
+      }
+
+      const client = new Client({
+        name: 'merchant-workbench-codex-mcp',
+        version: '0.1.0'
+      });
+
+      transport.onerror = (err) => console.error('[preload] codex MCP transport error:', err);
+      transport.onclose = () => {
+        const proc = transport._process;
+        const code = proc ? proc.exitCode : undefined;
+        const sig = proc ? proc.signalCode : undefined;
+        console.warn('[preload] codex MCP transport closed', { exitCode: code, signal: sig });
+        codexMcpClientPromise = null;
+      };
+
+      try {
+        await client.connect(transport);
+        const caps = client.getServerCapabilities();
+        if (!caps || !caps.tools) {
+          throw new Error('Codex MCP server did not report tool capabilities');
+        }
+        console.log('[preload] Codex MCP client connected (stdio), capabilities:', caps);
+        return { client, transport };
+      } catch (error) {
+        console.error('[preload] Codex MCP client connect failed:', error);
+        try {
+          await transport.close?.();
+        } catch {}
+        codexMcpClientPromise = null;
+        throw error;
+      }
+    })();
+  }
+
+  return codexMcpClientPromise;
 };
 
 const codexOrders = async (prompt) => {
@@ -204,6 +359,92 @@ const codexReport = async (prompt, orders = [], mode = 'trends') => {
     return { ok: false, error: codexInitError };
   }
   const normalizedMode = ['csv', 'top', 'trends'].includes(mode) ? mode : 'trends';
+
+  // Attempt Codex-as-MCP first (uses codex mcp-server tools)
+  const tryCodexMcp = async () => {
+    try {
+      const { client } = await getCodexMcpClient();
+      const lines = [];
+      if (normalizedMode === 'csv') {
+        lines.push(
+          'Produce a CSV string with a header row. Each row should represent an order line item: columns id,name,total_price,currency,financial_status,fulfillment_status,created_at,tag_list,item_title,item_sku,item_qty. Do not include PII.'
+        );
+      } else if (normalizedMode === 'top') {
+        lines.push(
+          'Return JSON with shape {"top":[{"name":string,"total_price":string,"currency":string,"line_item_count":number}]}, sorted by total_price desc, max 10. Do not include PII.'
+        );
+      } else {
+        lines.push(
+          'Provide 3-5 concise bullets summarizing trends or notable patterns in the provided orders. No PII. <800 characters.'
+        );
+      }
+      lines.push(`User request: ${prompt}`);
+      lines.push(`Orders JSON:\n${JSON.stringify(orders)}`);
+
+      const preferredModels = resolveCodexModels();
+      let lastErr;
+      for (const model of preferredModels) {
+        try {
+          const result = await client.callTool({
+            name: 'codex',
+            arguments: {
+              prompt: lines.join('\n'),
+              sandbox: 'workspace-write',
+              'approval-policy': 'never',
+              model
+            }
+          });
+
+          const text =
+            (result.content || [])
+              .map((c) => c.text || (c.json ? JSON.stringify(c.json) : ''))
+              .filter(Boolean)
+              .join('\n')
+              .trim() || '';
+
+          if (!text) {
+            throw new Error('Empty Codex MCP response');
+          }
+
+          if (normalizedMode === 'csv') {
+            const csv = stripCodeFence(text) || text;
+            console.log('[codex] MCP insights success (csv) via model', model);
+            return { ok: true, mode: normalizedMode, data: { csv } };
+          }
+          if (normalizedMode === 'top') {
+            let parsed = null;
+            try {
+              parsed = JSON.parse(text);
+            } catch {}
+            if (parsed && Array.isArray(parsed.top)) {
+              console.log('[codex] MCP insights success (top) via model', model);
+              return { ok: true, mode: normalizedMode, data: { top: parsed.top } };
+            }
+            throw new Error('Codex MCP top response not parseable');
+          }
+          console.log('[codex] MCP insights success (trends) via model', model);
+          return { ok: true, mode: normalizedMode, data: { analysis: text } };
+        } catch (err) {
+          lastErr = err;
+          console.warn('[codex] MCP insights path failed for model', model, err?.message || err);
+        }
+      }
+      if (lastErr) {
+        throw lastErr;
+      }
+    } catch (err) {
+      console.warn('[codex] MCP insights path failed, will fall back:', err?.message || err);
+      return { ok: false, error: err?.message || 'Codex MCP report failed' };
+    }
+  };
+
+  const mcpAttempt = await tryCodexMcp();
+  if (mcpAttempt?.ok && mcpAttempt.data) {
+    return mcpAttempt;
+  }
+
+  // Fallback to schema-only path
+  console.log('[codex] insights using schema fallback (Codex MCP unavailable or failed)');
   const thread = await getCodexThread();
   let schema;
   let system;
@@ -261,6 +502,10 @@ const codexReport = async (prompt, orders = [], mode = 'trends') => {
       ],
       { outputSchema: schema }
     );
+    if (normalizedMode === 'csv') {
+      const csv = stripCodeFence(turn.finalResponse.csv || '') || '';
+      return { ok: true, mode: normalizedMode, data: { csv } };
+    }
     return { ok: true, mode: normalizedMode, data: turn.finalResponse };
   } catch (error) {
     return { ok: false, error: error?.message || 'Codex report failed' };
@@ -412,6 +657,8 @@ const codexOrderComposer = async (prompt, draft) => {
     return { ok: false, error: error?.message || 'Codex order composer failed' };
   }
 };
+
+const codexIsUsingMcp = () => codexUsingMcp;
 
 const getMcpClient = async () => {
   if (!mcpClientPromise) {
@@ -781,6 +1028,7 @@ const api = {
   codexReport,
   codexAutomation,
   codexOrderComposer,
+  codexIsUsingMcp,
   oauthStart: (shop) => ipcRenderer.invoke('oauth:start', shop),
   oauthList: () => ipcRenderer.invoke('oauth:list'),
   oauthGetActive: () => ipcRenderer.invoke('oauth:getActive'),

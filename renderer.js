@@ -3422,11 +3422,18 @@ function App() {
       // Heuristic: derive order_number/name if present in raw query and not parsed
       let derivedOrderNumber = params.order_number;
       if (!derivedOrderNumber) {
-        const token = nlQuery
-          .match(/[#]?[A-Za-z0-9-]{5,}/g)
-          ?.find((t) => /[0-9]/.test(t));
-        if (token) {
-          derivedOrderNumber = token.replace(/^#/, '');
+        const explicitOrderMatch = nlQuery.match(
+          /(?:order\s*(?:number|no\.?|#)?\s*|#)\s*([A-Za-z0-9-]{3,})/i
+        );
+        if (explicitOrderMatch && explicitOrderMatch[1]) {
+          derivedOrderNumber = explicitOrderMatch[1].replace(/^#/, '');
+        } else {
+          const token = nlQuery
+            .match(/[#]?[A-Za-z0-9-]{5,}/g)
+            ?.find((t) => /[0-9]/.test(t));
+          if (token) {
+            derivedOrderNumber = token.replace(/^#/, '');
+          }
         }
       }
 
